@@ -1,0 +1,1 @@
+<div id="test" data-subjects='@json($group->subjects)'></div>
