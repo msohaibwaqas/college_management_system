@@ -163,6 +163,19 @@ class Student extends Model
         return $this->hasOne(StudentTransport::class, 'student_id', 'id');
     }
 
+    public function struckOffLogs(): HasMany
+    {
+        return $this->hasMany(StudentStruckOffLog::class, 'student_id', 'id');
+    }
+
+    /**
+     * Returns the active (not-yet-readmitted) struck-off log, if any.
+     */
+    public function activeStruckOffLog(): ?StudentStruckOffLog
+    {
+        return $this->struckOffLogs()->where('status', 'struck_off')->latest('struck_off_at')->first();
+    }
+
     // Scopes
     public function scopeSearchByName(Builder $query, string $name): Builder
     {
