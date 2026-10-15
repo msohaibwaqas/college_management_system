@@ -6,6 +6,9 @@
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Mark Attendance</h1>
+        <a href="{{ route('struck-off.teacher') }}" class="btn btn-outline-danger btn-sm">
+            <i class="fas fa-user-slash me-1"></i> Struck-Off Students
+        </a>
     </div>
 
     @if(session('success'))

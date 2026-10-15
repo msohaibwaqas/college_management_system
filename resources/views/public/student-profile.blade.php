@@ -15,7 +15,125 @@
 </div>
 
 <div class="container mb-5">
+    {{-- ====================================================
+         STRUCK-OFF ALERT BANNER (shown when student is currently struck off)
+         ==================================================== --}}
+    @php
+        $activeStruckOffLog = $student->struckOffLogs()->where('status', 'struck_off')
+            ->with(['struckOffBy', 'subject'])
+            ->latest('struck_off_at')->first();
+        $allStruckOffLogs   = $student->struckOffLogs()
+            ->with(['struckOffBy', 'subject', 'readmittedBy'])
+            ->orderByDesc('struck_off_at')->get();
+    @endphp
+
+    @if($activeStruckOffLog)
+    <div class="alert border-0 shadow-sm mb-4 p-0 overflow-hidden" role="alert" style="border-left: 6px solid #dc3545 !important;">
+        <div class="d-flex align-items-center p-4" style="background: linear-gradient(135deg, #fff5f5, #ffe4e4);">
+            <div class="me-4 text-danger fs-1">
+                <i class="fas fa-user-slash"></i>
+            </div>
+            <div class="flex-grow-1">
+                <h5 class="fw-bold text-danger mb-1">
+                    <i class="fas fa-exclamation-triangle me-2"></i>This student is currently Struck Off
+                </h5>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-4">
+                        <small class="text-muted d-block">Struck Off By</small>
+                        <strong>{{ $activeStruckOffLog->struckOffBy?->full_name ?? 'Unknown Teacher' }}</strong>
+                        <small class="text-muted d-block">{{ $activeStruckOffLog->struckOffBy?->designation ?? '' }}</small>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted d-block">Subject</small>
+                        <strong>{{ $activeStruckOffLog->subject?->name ?? '—' }}</strong>
+                        <small class="text-muted d-block">{{ $activeStruckOffLog->absence_count_at_strike }} absents at time of strike</small>
+                    </div>
+                    <div class="col-md-4">
+                        <small class="text-muted d-block">Date</small>
+                        <strong>{{ $activeStruckOffLog->struck_off_at?->format('d M Y') }}</strong>
+                        <small class="text-muted d-block">{{ $activeStruckOffLog->struck_off_at?->diffForHumans() }}</small>
+                    </div>
+                </div>
+                @if($activeStruckOffLog->struck_off_reason)
+                    <div class="mt-2 text-muted fst-italic small">
+                        <i class="fas fa-quote-left me-1"></i>{{ $activeStruckOffLog->struck_off_reason }}
+                    </div>
+                @endif
+            </div>
+        </div>
+    </div>
+    @endif
+
+    {{-- Struck-Off History Table (always shown if any history exists) --}}
+    @if($allStruckOffLogs->isNotEmpty())
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-dark text-white d-flex align-items-center justify-content-between">
+            <h5 class="mb-0">
+                <i class="fas fa-history me-2"></i>Struck-Off History
+            </h5>
+            <span class="badge bg-danger">{{ $allStruckOffLogs->count() }} Record(s)</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Subject</th>
+                            <th>Struck Off By</th>
+                            <th class="text-center">Absents</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                            <th>Readmitted By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($allStruckOffLogs as $i => $log)
+                        <tr class="{{ $log->status === 'struck_off' ? 'table-danger bg-opacity-25' : '' }}">
+                            <td class="text-muted small">{{ $i + 1 }}</td>
+                            <td>{{ $log->subject?->name ?? '—' }}</td>
+                            <td>
+                                <div class="fw-semibold">{{ $log->struckOffBy?->full_name ?? '—' }}</div>
+                                <small class="text-muted">{{ $log->struckOffBy?->designation ?? '' }}</small>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-danger">{{ $log->absence_count_at_strike }}</span>
+                            </td>
+                            <td>
+                                <div>{{ $log->struck_off_at?->format('d M Y') }}</div>
+                                @if($log->struck_off_reason)
+                                    <small class="text-muted fst-italic">{{ $log->struck_off_reason }}</small>
+                                @endif
+                            </td>
+                            <td>
+                                @if($log->status === 'struck_off')
+                                    <span class="badge bg-danger">Struck Off</span>
+                                @else
+                                    <span class="badge bg-success">Readmitted</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($log->status === 'readmitted')
+                                    <div>{{ $log->readmittedBy?->name ?? '—' }}</div>
+                                    <small class="text-muted">{{ $log->readmitted_at?->format('d M Y') }}</small>
+                                    @if($log->readmission_note)
+                                        <small class="text-muted fst-italic d-block">{{ $log->readmission_note }}</small>
+                                    @endif
+                                @else
+                                    <span class="text-muted">Pending</span>
+                                @endif
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    @endif
+
     {{-- Student Basic Info --}}
+
     <div class="row mb-4">
         <div class="col-lg-4 mb-4">
             <div class="card border-0 shadow-sm text-center h-100">

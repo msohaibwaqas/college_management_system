@@ -489,4 +489,21 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/export', [LibraryController::class, 'exportBooks'])->name('export_books');
     });
 
+
+    // Struck-Off Management
+    // Teacher: view eligible students and strike off
+    Route::prefix('struck-off')->name('struck-off.')->group(function () {
+        Route::middleware('role:teacher')->group(function () {
+            Route::get('/teacher', [\App\Http\Controllers\StruckOffController::class, 'teacherPanel'])->name('teacher');
+            Route::post('/', [\App\Http\Controllers\StruckOffController::class, 'store'])->name('store');
+        });
+
+        Route::middleware('role:admin,principal,clerk,hssc_clerk,hssc_admin')->group(function () {
+            Route::get('/', [\App\Http\Controllers\StruckOffController::class, 'index'])->name('index');
+            Route::post('/{log}/readmit', [\App\Http\Controllers\StruckOffController::class, 'readmit'])->name('readmit');
+            Route::get('/student/{student}/history', [\App\Http\Controllers\StruckOffController::class, 'history'])->name('history');
+        });
+    });
+
 }); // End of auth middleware group
+
