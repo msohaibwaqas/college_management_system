@@ -40,6 +40,11 @@
         font-size: 0.95rem;
         font-weight: 700;
     }
+    .part-badge {
+        font-size: 0.76rem;
+        padding: 3px 7px;
+        border-radius: 4px;
+    }
     @media print {
         #sidebar, .filter-section, .btn-print, .btn-export, .nav, footer, .app-header {
             display: none !important;
@@ -72,7 +77,7 @@
                     <i class="fas fa-file-invoice me-2"></i>Subject Final Result Report
                 </h4>
                 <small class="text-white-50">
-                    BISE 12th Examination Marks &amp; Assigned Subject Teacher
+                    BISE 11th &amp; 12th Examination Marks &amp; Assigned Subject Teacher
                 </small>
             </div>
             @if(!empty($selectedSubject))
@@ -229,7 +234,7 @@
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" role="switch" id="toggleSplitColumns">
                         <label class="form-check-label small fw-bold text-muted" for="toggleSplitColumns">
-                            Split Marks &amp; Teacher Columns
+                            Split 11th, 12th &amp; Teacher Columns
                         </label>
                     </div>
                 </div>
@@ -240,25 +245,30 @@
                             <thead class="table-dark">
                                 <tr>
                                     <th style="width: 7%;">Roll No</th>
-                                    <th style="width: 11%;">BISE 11th Roll No</th>
-                                    <th style="width: 11%;">BISE 12th Roll No</th>
-                                    <th style="width: 22%;" class="text-start">Student Name</th>
-                                    <th style="width: 20%;" class="text-start">Father Name</th>
+                                    <th style="width: 10%;">BISE 11th Roll No</th>
+                                    <th style="width: 10%;">BISE 12th Roll No</th>
+                                    <th style="width: 20%;" class="text-start">Student Name</th>
+                                    <th style="width: 18%;" class="text-start">Father Name</th>
                                     
                                     <!-- Combined Column (Default) -->
-                                    <th class="col-combined text-center" style="width: 29%;">
-                                        <div class="fw-bold">{{ $selectedSubject->name }}</div>
+                                    <th class="col-combined text-center" style="width: 35%;">
+                                        <div class="fw-bold fs-6">{{ $selectedSubject->name }}</div>
                                         <div class="text-warning small" style="font-size: 0.75rem; font-weight: normal;">
-                                            (12th BISE Marks | Teacher Name)
+                                            (11th &amp; 12th BISE Marks | Teacher Name)
                                         </div>
                                     </th>
 
                                     <!-- Split Columns (Hidden by default, toggled via switch) -->
-                                    <th class="col-split text-center d-none" style="width: 15%;">
-                                        <div class="fw-bold">{{ $selectedSubject->name }}</div>
-                                        <div class="text-warning small" style="font-size: 0.75rem; font-weight: normal;">12th BISE Marks</div>
+                                    <th class="col-split text-center d-none" style="width: 8%;">
+                                        <div class="fw-bold">11th BISE</div>
                                     </th>
-                                    <th class="col-split text-center d-none" style="width: 14%;">
+                                    <th class="col-split text-center d-none" style="width: 11%;">
+                                        <div class="fw-bold">12th BISE</div>
+                                    </th>
+                                    <th class="col-split text-center d-none" style="width: 8%;">
+                                        <div class="fw-bold">Total BISE</div>
+                                    </th>
+                                    <th class="col-split text-center d-none" style="width: 12%;">
                                         <div class="fw-bold">Teacher Name</div>
                                     </th>
                                 </tr>
@@ -281,24 +291,44 @@
                                         <!-- Father Name -->
                                         <td class="text-start text-secondary">{{ $row['father_name'] }}</td>
 
-                                        <!-- Combined Column: Selected Subject Name (Marks | Teacher) -->
+                                        <!-- Combined Column: Selected Subject Name (Both 11th & 12th Marks | Teacher) -->
                                         <td class="col-combined text-center">
-                                            <div class="d-flex flex-column align-items-center justify-content-center">
-                                                @if($row['is_absent'])
+                                            <div class="d-flex flex-column align-items-center justify-content-center py-1">
+                                                <!-- Total Marks -->
+                                                @if($row['status'] === 'Absent')
                                                     <span class="badge bg-danger px-2 py-1 mb-1">Absent</span>
-                                                @elseif($row['marks'] !== '-')
+                                                @elseif($row['combined_marks'] !== '-')
                                                     <div class="mb-1">
                                                         <span class="marks-badge {{ $row['status'] === 'Pass' ? 'text-success' : 'text-danger' }}">
-                                                            {{ $row['marks'] }}
+                                                            Total: {{ $row['combined_marks'] }}
                                                         </span>
-                                                        @if(!empty($row['details']))
-                                                            <small class="d-block text-muted" style="font-size: 0.72rem;">{{ $row['details'] }}</small>
-                                                        @endif
                                                     </div>
                                                 @else
                                                     <span class="text-muted fw-bold mb-1">-</span>
                                                 @endif
 
+                                                <!-- 11th & 12th Marks Badges -->
+                                                @if($row['marks_11'] !== '-' || $row['marks_12'] !== '-')
+                                                    <div class="d-flex flex-wrap justify-content-center gap-1 mb-1" style="font-size: 0.75rem;">
+                                                        @if($row['marks_11'] !== '-')
+                                                            <span class="badge bg-light text-dark border part-badge">
+                                                                <span class="text-secondary">11th:</span>
+                                                                <strong class="{{ $row['is_absent_11'] ? 'text-danger' : 'text-primary' }}">{{ $row['marks_11'] }}</strong>
+                                                            </span>
+                                                        @endif
+                                                        @if($row['marks_12'] !== '-')
+                                                            <span class="badge bg-light text-dark border part-badge">
+                                                                <span class="text-secondary">12th:</span>
+                                                                <strong class="{{ $row['is_absent_12'] ? 'text-danger' : 'text-primary' }}">{{ $row['marks_12'] }}</strong>
+                                                                @if(!empty($row['details_12']))
+                                                                    <small class="text-muted">({{ $row['details_12'] }})</small>
+                                                                @endif
+                                                            </span>
+                                                        @endif
+                                                    </div>
+                                                @endif
+
+                                                <!-- Teacher Name -->
                                                 <div class="pt-1 mt-1 border-top w-100 text-center" style="border-color: rgba(0,0,0,0.08) !important;">
                                                     <span class="teacher-badge">
                                                         <i class="fas fa-chalkboard-teacher text-primary me-1"></i>
@@ -308,21 +338,43 @@
                                             </div>
                                         </td>
 
-                                        <!-- Split Column: Marks -->
+                                        <!-- Split Column: 11th Marks -->
                                         <td class="col-split text-center d-none">
-                                            @if($row['is_absent'])
-                                                <span class="badge bg-danger px-2 py-1">Absent</span>
-                                            @elseif($row['marks'] !== '-')
+                                            @if($row['is_absent_11'])
+                                                <span class="badge bg-danger">Absent</span>
+                                            @elseif($row['marks_11'] !== '-')
+                                                <strong class="text-primary">{{ $row['marks_11'] }}</strong>
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
+
+                                        <!-- Split Column: 12th Marks -->
+                                        <td class="col-split text-center d-none">
+                                            @if($row['is_absent_12'])
+                                                <span class="badge bg-danger">Absent</span>
+                                            @elseif($row['marks_12'] !== '-')
                                                 <div>
-                                                    <span class="marks-badge {{ $row['status'] === 'Pass' ? 'text-success' : 'text-danger' }}">
-                                                        {{ $row['marks'] }}
-                                                    </span>
-                                                    @if(!empty($row['details']))
-                                                        <small class="d-block text-muted" style="font-size: 0.72rem;">{{ $row['details'] }}</small>
+                                                    <strong class="text-primary">{{ $row['marks_12'] }}</strong>
+                                                    @if(!empty($row['details_12']))
+                                                        <small class="d-block text-muted" style="font-size: 0.72rem;">{{ $row['details_12'] }}</small>
                                                     @endif
                                                 </div>
                                             @else
-                                                <span class="text-muted fw-bold">-</span>
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
+
+                                        <!-- Split Column: Total BISE Marks -->
+                                        <td class="col-split text-center d-none">
+                                            @if($row['status'] === 'Absent')
+                                                <span class="badge bg-danger">Absent</span>
+                                            @elseif($row['combined_marks'] !== '-')
+                                                <strong class="{{ $row['status'] === 'Pass' ? 'text-success' : 'text-danger' }} fs-6">
+                                                    {{ $row['combined_marks'] }}
+                                                </strong>
+                                            @else
+                                                <span class="text-muted">-</span>
                                             @endif
                                         </td>
 

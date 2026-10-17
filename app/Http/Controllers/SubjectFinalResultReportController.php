@@ -76,8 +76,8 @@ class SubjectFinalResultReportController extends Controller
                     $absent = $reportData->where('status', 'Absent')->count();
                     $noResult = $reportData->where('status', 'No Result')->count();
 
-                    $validMarks = $reportData->filter(fn($r) => $r['obtained'] !== null && !$r['is_absent']);
-                    $avgMarks = $validMarks->count() > 0 ? round($validMarks->avg('obtained'), 1) : 0;
+                    $validMarks = $reportData->filter(fn($r) => $r['combined_obtained'] !== null && !$r['is_absent']);
+                    $avgMarks = $validMarks->count() > 0 ? round($validMarks->avg('combined_obtained'), 1) : 0;
                     $passPercentage = $appeared > 0 ? round(($passed / $appeared) * 100, 1) : 0;
 
                     $summary = [
@@ -163,7 +163,7 @@ class SubjectFinalResultReportController extends Controller
                 'results' => function($q) use ($subjectId) {
                     $q->where('subject_id', $subjectId)
                       ->where('exam_type', 'Final')
-                      ->where('class_level', '12')
+                      ->whereIn('class_level', ['11', '12'])
                       ->whereNull('deleted_at')
                       ->orderBy('id', 'desc');
                 }
@@ -203,39 +203,89 @@ class SubjectFinalResultReportController extends Controller
             $studentName = trim("{$student->first_name} " . ($student->last_name ?? ''));
             $fatherName = $student->father ? $student->father->name : 'N/A';
 
-            // Identify assigned teacher (prefer class 12, fallback to any)
+            // Identify assigned teacher (prefer class 12, fallback to class 11 or any)
             $stsList = $student->studentTeacherSubjects->where('subject_id', $subjectId);
             $sts12 = $stsList->firstWhere('class_level', '12');
             $targetSts = $sts12 ?? $stsList->first();
             $teacherName = ($targetSts && $targetSts->staff) ? $targetSts->staff->full_name : 'Not Assigned';
 
-            // Identify 12th BISE Final result
-            $result = $student->results->first();
-            $marks = '-';
-            $details = '';
+            // Extract 11th and 12th Final results
+            $res11 = $student->results->where('class_level', '11')->first();
+            $res12 = $student->results->where('class_level', '12')->first();
+
+            // 11th marks processing
+            $marks11 = '-';
+            $obtained11 = null;
+            $total11 = null;
+            $isAbsent11 = false;
+            if ($res11) {
+                $total11 = $res11->total_marks ?? 0;
+                if ($res11->is_absent) {
+                    $marks11 = 'Absent';
+                    $isAbsent11 = true;
+                    $obtained11 = 0;
+                } else {
+                    $obtained11 = ($res11->obtained_theory ?? 0) + ($res11->obtained_practical ?? 0);
+                    $marks11 = "{$obtained11}/{$total11}";
+                }
+            }
+
+            // 12th marks processing
+            $marks12 = '-';
+            $details12 = '';
+            $obtained12 = null;
+            $total12 = null;
+            $isAbsent12 = false;
+            if ($res12) {
+                $total12 = $res12->total_marks ?? 0;
+                if ($res12->is_absent) {
+                    $marks12 = 'Absent';
+                    $isAbsent12 = true;
+                    $obtained12 = 0;
+                } else {
+                    $obtained12 = ($res12->obtained_theory ?? 0) + ($res12->obtained_practical ?? 0);
+                    $marks12 = "{$obtained12}/{$total12}";
+                    if ($res12->obtained_practical !== null && $res12->obtained_practical > 0) {
+                        $details12 = "Th: {$res12->obtained_theory} | Pr: {$res12->obtained_practical}";
+                    }
+                }
+            }
+
+            // Combined marks calculation
+            $combinedMarksDisplay = '-';
+            $combinedObtained = null;
+            $combinedTotal = null;
             $status = 'No Result';
             $isAbsent = false;
-            $totalObtained = null;
-            $totalMarks = null;
-            $percentage = null;
 
-            if ($result) {
-                $totalMarks = $result->total_marks ?? 0;
-                if ($result->is_absent) {
-                    $marks = 'Absent';
-                    $status = 'Absent';
-                    $isAbsent = true;
-                    $totalObtained = 0;
-                } else {
-                    $totalObtained = ($result->obtained_theory ?? 0) + ($result->obtained_practical ?? 0);
-                    $marks = "{$totalObtained}/{$totalMarks}";
+            if ($res11 || $res12) {
+                $combinedObtained = 0;
+                $combinedTotal = 0;
+                $hasValidMarks = false;
 
-                    if ($result->obtained_practical !== null && $result->obtained_practical > 0) {
-                        $details = "Th: {$result->obtained_theory} | Pr: {$result->obtained_practical}";
+                if ($res11) {
+                    $combinedTotal += $total11;
+                    if (!$isAbsent11) {
+                        $combinedObtained += $obtained11;
+                        $hasValidMarks = true;
                     }
+                }
 
-                    $percentage = $totalMarks > 0 ? round(($totalObtained / $totalMarks) * 100, 1) : 0;
-                    $status = ($totalMarks > 0 && ($totalObtained / $totalMarks) >= 0.33) ? 'Pass' : 'Fail';
+                if ($res12) {
+                    $combinedTotal += $total12;
+                    if (!$isAbsent12) {
+                        $combinedObtained += $obtained12;
+                        $hasValidMarks = true;
+                    }
+                }
+
+                if (($res11 && $isAbsent11 && !$res12) || (!$res11 && $res12 && $isAbsent12) || ($res11 && $isAbsent11 && $res12 && $isAbsent12)) {
+                    $isAbsent = true;
+                    $status = 'Absent';
+                    $combinedMarksDisplay = 'Absent';
+                } else {
+                    $combinedMarksDisplay = "{$combinedObtained}/{$combinedTotal}";
+                    $status = ($combinedTotal > 0 && ($combinedObtained / $combinedTotal) >= 0.33) ? 'Pass' : 'Fail';
                 }
             }
 
@@ -247,14 +297,28 @@ class SubjectFinalResultReportController extends Controller
                 'student_name' => $studentName,
                 'father_name' => $fatherName,
                 'subject_name' => $subject->name,
-                'marks' => $marks,
-                'details' => $details,
+                
+                // 11th class marks
+                'marks_11' => $marks11,
+                'obtained_11' => $obtained11,
+                'total_11' => $total11,
+                'is_absent_11' => $isAbsent11,
+
+                // 12th class marks
+                'marks_12' => $marks12,
+                'details_12' => $details12,
+                'obtained_12' => $obtained12,
+                'total_12' => $total12,
+                'is_absent_12' => $isAbsent12,
+
+                // Combined BISE marks
+                'combined_marks' => $combinedMarksDisplay,
+                'combined_obtained' => $combinedObtained,
+                'combined_total' => $combinedTotal,
+
                 'teacher_name' => $teacherName,
                 'status' => $status,
                 'is_absent' => $isAbsent,
-                'obtained' => $totalObtained,
-                'total_marks' => $totalMarks,
-                'percentage' => $percentage,
             ];
         }
 
