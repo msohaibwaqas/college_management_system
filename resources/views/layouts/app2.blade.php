@@ -279,7 +279,7 @@
                 @endif
 
                 <li>
-                    <a href="#" class="menu-toggle {{ request()->routeIs(['students.*', 'attendance.*', 'bise-roll-numbers.*']) ? 'active' : '' }}" data-target="hssc-students">
+                    <a href="#" class="menu-toggle {{ request()->routeIs(['students.*', 'attendance.*', 'bise-roll-numbers.*', 'struck-off.*']) ? 'active' : '' }}" data-target="hssc-students">
                         <i class="fas fa-user-graduate"></i>
                         <span>Student Affairs</span>
                         <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -291,6 +291,24 @@
                             <li><a href="{{ route('students.promotion') }}">Class Promotion</a></li>
                         @endif
                         <li><a href="{{ route('attendance.index') }}">Class Attendance</a></li>
+                        @if($activeRole === 'teacher')
+                            <li>
+                                <a href="{{ route('struck-off.teacher') }}"
+                                   class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}"
+                                   style="color: #ff8080;">
+                                    <i class="fas fa-user-slash me-1" style="font-size:0.8em;"></i> Struck-Off Students
+                                </a>
+                            </li>
+                        @endif
+                        @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin']))
+                            <li>
+                                <a href="{{ route('struck-off.index') }}"
+                                   class="{{ request()->routeIs('struck-off.index') ? 'active' : '' }}"
+                                   style="color: #ff8080;">
+                                    <i class="fas fa-user-slash me-1" style="font-size:0.8em;"></i> Struck-Off Mgmt
+                                </a>
+                            </li>
+                        @endif
                         <li><a href="{{ route('attendance.gate.index') }}">Gate Attendance</a></li>
                         <li><a href="{{ route('bise-roll-numbers.index') }}">BISE Roll Nos</a></li>
                         <li><a href="{{ route('students.id_cards.index') }}">Generate ID Cards</a></li>
@@ -384,6 +402,8 @@
                     <li><a href="{{ route('reports.subject-enrollment.index') }}">Subject Enrollment</a></li>
                     @if($sidebarView == 'HSSC')
                         <li><a href="{{ route('reports.final-result-report.index') }}">Annual Results</a></li>
+                        <li><a href="{{ route('reports.detailed-final-result-report.index') }}">Detailed Final Result</a></li>
+                        <li><a href="{{ route('reports.subject-final-result-report.index') }}">Subject Final Result</a></li>
                         <li><a href="{{ route('reports.test-result-report.index') }}">Test Performance</a></li>
                         <li><a href="{{ route('reports.test-attendance-report') }}">Attendance Analytics</a></li>
                     @else

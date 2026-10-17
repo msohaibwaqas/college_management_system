@@ -229,6 +229,7 @@
                             <li><a href="{{ route('reports.test-result-report.index') }}" class="{{ request()->routeIs('reports.test-result-report.*') ? 'active' : '' }}">Test Result Report</a></li>
                             <li><a href="{{ route('reports.detailed-test-result-report.index') }}" class="{{ request()->routeIs('reports.detailed-test-result-report.*') ? 'active' : '' }}">Detailed Test Result Report</a></li>
                             <li><a href="{{ route('reports.detailed-final-result-report.index') }}" class="{{ request()->routeIs('reports.detailed-final-result-report.*') ? 'active' : '' }}">Detailed Final Result Report</a></li>
+                            <li><a href="{{ route('reports.subject-final-result-report.index') }}" class="{{ request()->routeIs('reports.subject-final-result-report.*') ? 'active' : '' }}">Subject Final Result Report</a></li>
                             <li><a href="{{ route('reports.test-attendance-report') }}" class="{{ request()->routeIs('reports.test-attendance-report') ? 'active' : '' }}">Test Attendance Report</a></li>
                             <li><a href="{{ route('attendance.reports.form') }}" class="{{ request()->routeIs('attendance.reports.form') ? 'active' : '' }}">Daily Attendance Report</a></li>
                             @if(in_array($activeRole, ['admin', 'principal', 'super_admin']) || (isset($user) && $user->is_super_admin))
