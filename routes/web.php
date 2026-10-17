@@ -14,6 +14,7 @@ use App\Http\Controllers\FinalResultReportController;
 use App\Http\Controllers\TestResultReportController;
 use App\Http\Controllers\DetailedTestResultReportController;
 use App\Http\Controllers\DetailedFinalResultReportController;
+use App\Http\Controllers\SubjectFinalResultReportController;
 use App\Http\Controllers\TestAttendanceReportController;
 use App\Http\Controllers\CashRegisterReportController;
 use App\Http\Controllers\CustomStudentReportController;
@@ -232,6 +233,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/test-result-report', [TestResultReportController::class, 'index'])->name('reports.test-result-report.index');
         Route::get('/detailed-test-result-report', [DetailedTestResultReportController::class, 'index'])->name('reports.detailed-test-result-report.index');
         Route::get('/detailed-final-result-report', [DetailedFinalResultReportController::class, 'index'])->name('reports.detailed-final-result-report.index');
+        Route::get('/subject-final-result-report', [SubjectFinalResultReportController::class, 'index'])->name('reports.subject-final-result-report.index');
+        Route::get('/subject-final-result-report/get-subjects', [SubjectFinalResultReportController::class, 'getSubjects'])->name('reports.subject-final-result-report.get-subjects');
         Route::get('/test-attendance-report', [TestAttendanceReportController::class, 'index'])->name('reports.test-attendance-report');
 
         Route::get('/cash-register', [CashRegisterReportController::class, 'index'])->name('reports.cash-register.index');

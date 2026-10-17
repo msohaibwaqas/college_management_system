@@ -2136,6 +2136,7 @@ graph TD
 | GET | `reports/test-result-report` | reports.test-result-report.index | TestResultReportController@index | web, auth |
 | GET | `reports/detailed-test-result-report` | reports.detailed-test-result-report.index | DetailedTestResultReportController@index | web, auth |
 | GET | `reports/detailed-final-result-report` | reports.detailed-final-result-report.index | DetailedFinalResultReportController@index | web, auth |
+| GET | `reports/subject-final-result-report` | reports.subject-final-result-report.index | SubjectFinalResultReportController@index | web, auth |
 | GET | `reports/test-attendance-report` | reports.test-attendance-report | TestAttendanceReportController@index | web, auth |
 | GET | `reports/cash-register` | reports.cash-register.index | CashRegisterReportController@index | web, auth |
 | POST | `reports/cash-register` | reports.cash-register.show | CashRegisterReportController@show | web, auth |
