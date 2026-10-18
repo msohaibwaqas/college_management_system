@@ -399,6 +399,11 @@
                     <i class="fas fa-chevron-right menu-toggle-icon"></i>
                 </a>
                 <ul class="submenu" id="acad-reports">
+                    <li style="background: rgba(59, 130, 246, 0.15); border-left: 3px solid #3b82f6; margin-bottom: 4px;">
+                        <a href="{{ route('reports.custom-student-report') }}" class="{{ request()->routeIs('reports.custom-student-report*') ? 'active' : '' }}" style="font-weight: 600; color: #60a5fa;">
+                            <i class="fas fa-sliders-h me-1"></i> Dynamic Report Builder
+                        </a>
+                    </li>
                     <li><a href="{{ route('reports.subject-enrollment.index') }}">Subject Enrollment</a></li>
                     @if($sidebarView == 'HSSC')
                         <li><a href="{{ route('reports.final-result-report.index') }}">Annual Results</a></li>
@@ -413,7 +418,6 @@
                     @endif
                     <li style="border-top: 1px solid #23282d; margin: 5px 0;"></li>
                     <li><a href="{{ route('reports.cash-register.index') }}">Collection Report</a></li>
-                    <li><a href="{{ route('reports.custom-student-report') }}">Custom Query</a></li>
                 </ul>
             </li>
             @endif

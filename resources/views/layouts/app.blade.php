@@ -221,6 +221,11 @@
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
                         </a>
                         <ul class="submenu" id="reports-menu">
+                            <li style="background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; margin-bottom: 4px;">
+                                <a href="{{ route('reports.custom-student-report') }}" class="{{ request()->routeIs('reports.custom-student-report*') ? 'active' : '' }}" style="font-weight: 600;">
+                                    <i class="fas fa-sliders-h text-primary me-1"></i> Dynamic Report Builder
+                                </a>
+                            </li>
                             <li><a href="{{ route('reports.subject-enrollment.index') }}" class="{{ request()->routeIs('reports.subject-enrollment.*') ? 'active' : '' }}">Subject Enrollment</a></li>
                             <li><a href="{{ route('reports.cash-register.index') }}" class="{{ request()->routeIs('reports.cash-register.*') ? 'active' : '' }}">Cash Register</a></li>
                             <li><a href="{{ route('reports.students-without-teacher.index') }}" class="{{ request()->routeIs('reports.students-without-teacher.*') ? 'active' : '' }}">Students Without Teacher</a></li>

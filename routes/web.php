@@ -240,6 +240,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/cash-register', [CashRegisterReportController::class, 'index'])->name('reports.cash-register.index');
         Route::post('/cash-register', [CashRegisterReportController::class, 'show'])->name('reports.cash-register.show');
         Route::get('/custom-student-report', [CustomStudentReportController::class, 'index'])->name('reports.custom-student-report');
+        Route::get('/custom-student-report/export', [CustomStudentReportController::class, 'export'])->name('reports.custom-student-report.export');
     });
 
     // Results Management
