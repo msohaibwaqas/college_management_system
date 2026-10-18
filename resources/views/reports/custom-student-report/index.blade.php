@@ -377,7 +377,10 @@
                             </div>
 
                             @php
-                                $categories = collect($columnDefinitions)->groupBy('category');
+                                $categories = [];
+                                foreach ($columnDefinitions as $k => $def) {
+                                    $categories[$def['category']][$k] = $def;
+                                }
                             @endphp
 
                             <div class="row g-3">

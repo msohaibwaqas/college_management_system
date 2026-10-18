@@ -137,12 +137,16 @@ class CustomStudentReportController extends Controller
             'college_roll_no', 'name', 'father_name', 'class_level',
             'subject_group', 'status', 'attendance_pct', 'result_status', 'fee_status'
         ];
+        $columnDefinitions = $this->getColumnDefinitions();
+        $validKeys = array_keys($columnDefinitions);
+
         $selectedColumns = $request->input('columns', $defaultColumns);
+        if (is_array($selectedColumns)) {
+            $selectedColumns = array_values(array_intersect($selectedColumns, $validKeys));
+        }
         if (empty($selectedColumns)) {
             $selectedColumns = $defaultColumns;
         }
-
-        $columnDefinitions = $this->getColumnDefinitions();
 
         // 2. Fetch and Assemble Student Records if year is selected
         $rawStudents = [];
@@ -320,17 +324,23 @@ class CustomStudentReportController extends Controller
             });
         }
 
-        if ($request->filled('subject_id')) {
+        if ($request->filled('subject_id') && $request->filled('staff_id')) {
             $subId = $request->subject_id;
-            $admissionsQuery->whereHas('student.electives', function ($eq) use ($subId) {
-                $eq->where('subject_id', $subId);
+            $staffId = $request->staff_id;
+            $admissionsQuery->whereHas('student.studentTeacherSubjects', function ($tq) use ($staffId, $subId) {
+                $tq->where('staff_id', $staffId)->where('subject_id', $subId);
             });
-        }
-
-        if ($request->filled('staff_id')) {
+        } elseif ($request->filled('staff_id')) {
             $staffId = $request->staff_id;
             $admissionsQuery->whereHas('student.studentTeacherSubjects', function ($tq) use ($staffId) {
                 $tq->where('staff_id', $staffId);
+            });
+        } elseif ($request->filled('subject_id')) {
+            $subId = $request->subject_id;
+            $admissionsQuery->where(function ($sq) use ($subId) {
+                $sq->whereHas('student.electives', fn($q) => $q->where('subject_id', $subId))
+                   ->orWhereHas('student.compulsorySubjects', fn($q) => $q->where('subject_id', $subId))
+                   ->orWhereHas('student.studentTeacherSubjects', fn($q) => $q->where('subject_id', $subId));
             });
         }
 
