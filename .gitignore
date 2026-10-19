@@ -19,7 +19,8 @@
 /storage/*.key
 /storage/pail
 /storage/framework/views/*.php
-/vendor
+/vendor/*
+!/vendor/Sohaib/
 Homestead.json
 Homestead.yaml
 Thumbs.db

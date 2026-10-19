@@ -17,11 +17,14 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         
         // Register System Health Monitoring (inside web stack for session support)
-        $middleware->web(append: [
-            \Sohaib\CmsCore\SystemHealthMiddleware::class,
-            \App\Http\Middleware\EnforceMaxSessionDuration::class,
-            \App\Http\Middleware\EnforcePasswordChange::class,
-        ]);
+        $webMiddleware = [];
+        if (file_exists(dirname(__DIR__) . '/vendor/Sohaib/CmsCore/SystemHealthMiddleware.php')) {
+            $webMiddleware[] = \Sohaib\CmsCore\SystemHealthMiddleware::class;
+        }
+        $webMiddleware[] = \App\Http\Middleware\EnforceMaxSessionDuration::class;
+        $webMiddleware[] = \App\Http\Middleware\EnforcePasswordChange::class;
+
+        $middleware->web(append: $webMiddleware);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (\Illuminate\Http\Exceptions\PostTooLargeException $e, \Illuminate\Http\Request $request) {

@@ -388,7 +388,9 @@ class DashboardController extends Controller
                            FeeVoucher::count() + AdmissionApplication::count() + 
                            \DB::table('results')->count() + \DB::table('he_results')->count();
 
-        $systemOk = \Sohaib\CmsCore\ProtectionService::checkSystemStatus();
+        $systemOk = file_exists(base_path('vendor/Sohaib/CmsCore/ProtectionService.php'))
+            ? \Sohaib\CmsCore\ProtectionService::checkSystemStatus()
+            : true;
 
         return [
             'status' => $systemOk ? 'Healthy' : 'Compromised',

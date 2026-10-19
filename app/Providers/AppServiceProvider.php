@@ -28,7 +28,10 @@ class AppServiceProvider extends ServiceProvider
 
         // Register Licensing Credits Directive
         \Illuminate\Support\Facades\Blade::directive('cmsCredits', function () {
-            return "<?php echo \Sohaib\CmsCore\ProtectionService::renderCredits(); ?>";
+            if (file_exists(base_path('vendor/Sohaib/CmsCore/ProtectionService.php'))) {
+                return "<?php echo \\Sohaib\\CmsCore\\ProtectionService::renderCredits(); ?>";
+            }
+            return "";
         });
     }
 }
