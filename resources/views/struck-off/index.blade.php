@@ -15,7 +15,11 @@
                 <i class="fas fa-user-slash text-danger me-2"></i>Struck-Off Students
             </h1>
             <p class="text-muted small mb-0 mt-1">
-                Manage struck-off students. Readmit eligible students (max <strong>{{ $settings->max_readmissions_per_year }}</strong> times per academic year, threshold: <strong>&ge; {{ $settings->absent_threshold }} absents</strong>).
+                @if(!empty($isTeacher))
+                    Viewing students struck off by you.
+                @else
+                    Manage struck-off students. Readmit eligible students (max <strong>{{ $settings->max_readmissions_per_year }}</strong> times per academic year, threshold: <strong>&ge; {{ $settings->absent_threshold }} absents</strong>).
+                @endif
             </p>
         </div>
         <div class="d-flex gap-2 mt-2 mt-sm-0">

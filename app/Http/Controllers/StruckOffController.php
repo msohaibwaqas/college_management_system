@@ -291,11 +291,16 @@ class StruckOffController extends Controller
     }
 
     // -------------------------------------------------------
-    // ADMIN / CLERK / PRINCIPAL: list all struck-off students
+    // ADMIN / CLERK / PRINCIPAL / TEACHER: list struck-off students
     // -------------------------------------------------------
     public function index(Request $request)
     {
-        $settings = StruckOffSetting::getSettings();
+        $settings   = StruckOffSetting::getSettings();
+        $user       = Auth::user();
+        $activeRole = session('active_role');
+
+        // Check if user is operating under the teacher role
+        $isTeacher = ($activeRole === 'teacher') || (!$user->is_super_admin && !$user->hasAnyRole(['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'super_admin']));
 
         $query = StudentStruckOffLog::with([
                 'student',
@@ -305,6 +310,12 @@ class StruckOffController extends Controller
                 'admission',
             ])
             ->orderByDesc('struck_off_at');
+
+        // Teachers can ONLY see students whom they personally struck off
+        if ($isTeacher) {
+            $staffId = $user->staff?->id ?? ($user->staff_id ?? 0);
+            $query->where('struck_off_by', $staffId);
+        }
 
         // Filter by status
         $statusFilter = $request->query('status', 'struck_off');
@@ -323,12 +334,18 @@ class StruckOffController extends Controller
 
         $logs = $query->paginate(30)->withQueryString();
 
-        $availableYears = StudentStruckOffLog::select('academic_year')
+        $yearsQuery = StudentStruckOffLog::select('academic_year')
             ->distinct()
-            ->orderByDesc('academic_year')
-            ->pluck('academic_year');
+            ->orderByDesc('academic_year');
 
-        return view('struck-off.index', compact('logs', 'statusFilter', 'availableYears', 'settings'));
+        if ($isTeacher) {
+            $staffId = $user->staff?->id ?? ($user->staff_id ?? 0);
+            $yearsQuery->where('struck_off_by', $staffId);
+        }
+
+        $availableYears = $yearsQuery->pluck('academic_year');
+
+        return view('struck-off.index', compact('logs', 'statusFilter', 'availableYears', 'settings', 'isTeacher'));
     }
 
     // -------------------------------------------------------
