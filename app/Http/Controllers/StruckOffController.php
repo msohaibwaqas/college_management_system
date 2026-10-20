@@ -11,10 +11,21 @@ use App\Models\Admissions;
 use App\Models\Attendance;
 use App\Models\Subject;
 use App\Models\StruckOffSetting;
+use App\Services\StruckOffService;
+use App\Http\Requests\StruckOff\StoreStruckOffRequest;
+use App\Http\Requests\StruckOff\ReadmitStudentRequest;
+use App\Http\Requests\StruckOff\UpdateStruckOffSettingsRequest;
 use Carbon\Carbon;
 
 class StruckOffController extends Controller
 {
+    protected StruckOffService $struckOffService;
+
+    public function __construct(StruckOffService $struckOffService)
+    {
+        $this->struckOffService = $struckOffService;
+    }
+
     // -------------------------------------------------------
     // TEACHER & ADMIN: view students eligible to be struck off
     // -------------------------------------------------------
@@ -203,23 +214,13 @@ class StruckOffController extends Controller
     // -------------------------------------------------------
     // TEACHER & ADMIN: strike off an eligible student
     // -------------------------------------------------------
-    public function store(Request $request)
+    public function store(StoreStruckOffRequest $request)
     {
-        $request->validate([
-            'student_id'  => 'required|exists:students,id',
-            'subject_id'  => 'required|exists:subjects,id',
-            'month'       => 'nullable|string',
-            'reason'      => 'nullable|string|max:500',
-        ]);
-
         $user      = Auth::user();
         $staff     = $user->staff;
         $staffId   = $staff ? $staff->id : null;
-        $studentId = (int) $request->student_id;
-        $subjectId = (int) $request->subject_id;
-        $settings  = StruckOffSetting::getSettings();
-        $threshold = (int) $settings->absent_threshold; // Admin-set threshold only
-        $month     = $request->input('month');
+        $studentId = (int) $request->validated('student_id');
+        $subjectId = (int) $request->validated('subject_id');
 
         // Strictly verify assignment to this teacher if staff record exists
         if ($staffId) {
@@ -235,59 +236,22 @@ class StruckOffController extends Controller
             }
         }
 
-        // Verify absence count meets policy threshold
-        $attQuery = Attendance::where('student_id', $studentId)
-            ->where('subject_id', $subjectId)
-            ->where('status', 'absent');
-
-        if ($month && $month !== 'all') {
-            $attQuery->whereRaw("DATE_FORMAT(attendance_date, '%Y-%m') = ?", [$month]);
-        }
-
-        $absenceCount = $attQuery->count();
-
-        if ($absenceCount < $threshold) {
-            return back()->with('error', "Student has {$absenceCount} absents in this subject, which is below the required policy threshold of {$threshold} to strike off.");
-        }
-
-        // Check if already struck off
-        $alreadyStruckOff = StudentStruckOffLog::where('student_id', $studentId)
-            ->where('status', 'struck_off')
-            ->exists();
-
-        if ($alreadyStruckOff) {
-            return back()->with('error', 'This student is already struck off. They must be readmitted before being struck off again.');
-        }
-
-        // Get active admission
-        $admission = Admissions::where('student_id', $studentId)
-            ->whereIn('status', ['Active', 'active', 'Admitted', 'admitted'])
-            ->first();
-
-        if (!$admission) {
-            return back()->with('error', 'No active admission record found for this student.');
-        }
-
         $recorderStaffId = $staffId ?? ($user->staff_id ?? 1);
 
-        DB::transaction(function () use ($studentId, $admission, $recorderStaffId, $subjectId, $absenceCount, $request) {
-            StudentStruckOffLog::create([
-                'student_id'             => $studentId,
-                'admission_id'           => $admission->id,
-                'struck_off_by'          => $recorderStaffId,
-                'subject_id'             => $subjectId,
-                'absence_count_at_strike'=> $absenceCount,
-                'struck_off_at'          => now(),
-                'struck_off_reason'      => $request->reason,
-                'academic_year'          => $admission->academic_year ?? date('Y'),
-                'status'                 => 'struck_off',
-            ]);
+        try {
+            $this->struckOffService->strikeOff(
+                $studentId,
+                $subjectId,
+                $recorderStaffId,
+                $request->validated('reason'),
+                $request->validated('month')
+            );
 
-            $admission->update(['status' => 'Struck Off']);
-        });
-
-        $student = Student::find($studentId);
-        return back()->with('success', "Student {$student->full_name} has been struck off successfully.");
+            $student = Student::find($studentId);
+            return back()->with('success', "Student {$student->full_name} has been struck off successfully.");
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
     }
 
     // -------------------------------------------------------
@@ -348,64 +312,36 @@ class StruckOffController extends Controller
     // -------------------------------------------------------
     // ADMIN / CLERK: readmit a struck-off student
     // -------------------------------------------------------
-    public function readmit(Request $request, StudentStruckOffLog $log)
+    public function readmit(ReadmitStudentRequest $request, StudentStruckOffLog $log)
     {
-        $request->validate([
-            'readmission_note' => 'nullable|string|max:500',
-        ]);
+        try {
+            $this->struckOffService->readmit(
+                $log,
+                Auth::id(),
+                $request->validated('readmission_note')
+            );
 
-        if ($log->status !== 'struck_off') {
-            return back()->with('error', 'This student is not currently struck off.');
+            $student = $log->student;
+            $readmissionCount = $log->getReadmissionsCountForYear();
+            $maxAllowed = $this->struckOffService->getSettings()->max_readmissions_per_year;
+            return back()->with('success', "Student {$student->full_name} has been readmitted successfully (Readmission #{$readmissionCount} of max {$maxAllowed}).");
+        } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
         }
-
-        $settings = StruckOffSetting::getSettings();
-        $maxAllowed = $settings->max_readmissions_per_year;
-
-        // Check how many times readmitted in this academic year
-        $readmissionCount = StudentStruckOffLog::where('student_id', $log->student_id)
-            ->where('academic_year', $log->academic_year)
-            ->where('status', 'readmitted')
-            ->count();
-
-        if ($readmissionCount >= $maxAllowed) {
-            return back()->with('error', "This student has already been readmitted {$readmissionCount} times this academic year. Maximum {$maxAllowed} readmissions per year are allowed according to college policy.");
-        }
-
-        DB::transaction(function () use ($log, $request) {
-            $log->update([
-                'status'           => 'readmitted',
-                'readmitted_by'    => Auth::id(),
-                'readmitted_at'    => now(),
-                'readmission_note' => $request->readmission_note,
-            ]);
-
-            Admissions::where('id', $log->admission_id)
-                ->update(['status' => 'Active']);
-        });
-
-        $student = $log->student;
-        return back()->with('success', "Student {$student->full_name} has been readmitted successfully (Readmission #".($readmissionCount + 1)." of max {$maxAllowed}).");
     }
 
     // -------------------------------------------------------
     // ADMIN / PRINCIPAL: update struck-off rules and limits
     // -------------------------------------------------------
-    public function updateSettings(Request $request)
+    public function updateSettings(UpdateStruckOffSettingsRequest $request)
     {
-        $request->validate([
-            'absent_threshold'          => 'required|integer|min:1|max:100',
-            'max_readmissions_per_year' => 'required|integer|min:1|max:10',
-            'calculation_period'        => 'required|in:monthly,session',
-        ]);
+        $settings = $this->struckOffService->updateSettings(
+            (int) $request->validated('absent_threshold'),
+            (int) $request->validated('max_readmissions_per_year'),
+            $request->validated('calculation_period')
+        );
 
-        $settings = StruckOffSetting::getSettings();
-        $settings->update([
-            'absent_threshold'          => $request->absent_threshold,
-            'max_readmissions_per_year' => $request->max_readmissions_per_year,
-            'calculation_period'        => $request->calculation_period,
-        ]);
-
-        return back()->with('success', "Struck-off rules updated successfully: Default threshold is {$request->absent_threshold} absents, max readmissions is {$request->max_readmissions_per_year} per year.");
+        return back()->with('success', "Struck-off rules updated successfully: Default threshold is {$settings->absent_threshold} absents, max readmissions is {$settings->max_readmissions_per_year} per year.");
     }
 
     // -------------------------------------------------------
