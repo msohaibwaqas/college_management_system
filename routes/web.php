@@ -496,18 +496,18 @@ Route::middleware(['auth'])->group(function () {
 
     // Struck-Off Management
     Route::prefix('struck-off')->name('struck-off.')->group(function () {
-        // Teacher & Admin: view eligible students and strike off
+        // Teacher, Admin, Principal, Clerk: view eligible students, list struck-off students, and view history
         Route::middleware('role:teacher,admin,principal,super_admin,clerk,hssc_clerk,hssc_admin')->group(function () {
+            Route::get('/', [\App\Http\Controllers\StruckOffController::class, 'index'])->name('index');
             Route::get('/teacher', [\App\Http\Controllers\StruckOffController::class, 'teacherPanel'])->name('teacher');
             Route::post('/', [\App\Http\Controllers\StruckOffController::class, 'store'])->name('store');
+            Route::get('/student/{student}/history', [\App\Http\Controllers\StruckOffController::class, 'history'])->name('history');
         });
 
-        // Admin / Principal / Clerk: management, readmission, settings
+        // Admin / Principal / Clerk: settings, readmission
         Route::middleware('role:admin,principal,clerk,hssc_clerk,hssc_admin,super_admin')->group(function () {
-            Route::get('/', [\App\Http\Controllers\StruckOffController::class, 'index'])->name('index');
             Route::post('/settings', [\App\Http\Controllers\StruckOffController::class, 'updateSettings'])->name('settings.update');
             Route::post('/{log}/readmit', [\App\Http\Controllers\StruckOffController::class, 'readmit'])->name('readmit');
-            Route::get('/student/{student}/history', [\App\Http\Controllers\StruckOffController::class, 'history'])->name('history');
         });
     });
 

@@ -3,6 +3,11 @@
 
 @section('content')
 <div class="container-fluid">
+    @php
+        $authUser = Auth::user();
+        $activeRole = session('active_role');
+        $canManagePolicy = ($authUser && $authUser->is_super_admin) || in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'super_admin']) || ($authUser && $authUser->hasAnyRole(['admin', 'principal', 'super_admin']));
+    @endphp
 
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <div>
@@ -14,9 +19,11 @@
             </p>
         </div>
         <div class="d-flex gap-2 mt-2 mt-sm-0">
+            @if($canManagePolicy)
             <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal">
                 <i class="fas fa-cog me-1"></i> Policy Rules &amp; Limits
             </button>
+            @endif
             <a href="{{ route('struck-off.teacher') }}" class="btn btn-danger btn-sm">
                 <i class="fas fa-user-slash me-1"></i> Strike Off Eligible Students
             </a>
@@ -229,66 +236,70 @@
                                     </a>
 
                                     @if($log->status === 'struck_off')
-                                        {{-- Readmit Button --}}
-                                        @php
-                                            $readmissionsThisYear = \App\Models\StudentStruckOffLog::where('student_id', $log->student_id)
-                                                ->where('academic_year', $log->academic_year)
-                                                ->where('status', 'readmitted')
-                                                ->count();
-                                            $maxReadmit = $settings->max_readmissions_per_year;
-                                        @endphp
+                                        @if($canManagePolicy)
+                                            {{-- Readmit Button --}}
+                                            @php
+                                                $readmissionsThisYear = \App\Models\StudentStruckOffLog::where('student_id', $log->student_id)
+                                                    ->where('academic_year', $log->academic_year)
+                                                    ->where('status', 'readmitted')
+                                                    ->count();
+                                                $maxReadmit = $settings->max_readmissions_per_year;
+                                            @endphp
 
-                                        @if($readmissionsThisYear >= $maxReadmit)
-                                            <span class="badge bg-secondary" title="Max readmissions reached for this year">
-                                                <i class="fas fa-lock me-1"></i>Limit Reached ({{ $readmissionsThisYear }}/{{ $maxReadmit }})
-                                            </span>
-                                        @else
-                                            <button type="button"
-                                                    class="btn btn-success btn-sm"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#readmitModal{{ $log->id }}">
-                                                <i class="fas fa-user-check me-1"></i> Readmit
-                                                <span class="badge bg-white text-success ms-1">{{ $readmissionsThisYear }}/{{ $maxReadmit }}</span>
-                                            </button>
+                                            @if($readmissionsThisYear >= $maxReadmit)
+                                                <span class="badge bg-secondary" title="Max readmissions reached for this year">
+                                                    <i class="fas fa-lock me-1"></i>Limit Reached ({{ $readmissionsThisYear }}/{{ $maxReadmit }})
+                                                </span>
+                                            @else
+                                                <button type="button"
+                                                        class="btn btn-success btn-sm"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#readmitModal{{ $log->id }}">
+                                                    <i class="fas fa-user-check me-1"></i> Readmit
+                                                    <span class="badge bg-white text-success ms-1">{{ $readmissionsThisYear }}/{{ $maxReadmit }}</span>
+                                                </button>
 
-                                            <div class="modal fade" id="readmitModal{{ $log->id }}" tabindex="-1" aria-hidden="true">
-                                                <div class="modal-dialog modal-dialog-centered">
-                                                    <div class="modal-content border-success">
-                                                        <div class="modal-header bg-success text-white">
-                                                            <h5 class="modal-title">
-                                                                <i class="fas fa-user-check me-2"></i>Confirm Readmission
-                                                            </h5>
-                                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                                        </div>
-                                                        <div class="modal-body">
-                                                            <div class="alert alert-info border-0">
-                                                                Readmitting <strong>{{ $log->student?->full_name }}</strong>.
-                                                                They have been readmitted
-                                                                <strong>{{ $readmissionsThisYear }}</strong> time(s) this year.
-                                                                Maximum allowed by policy: <strong>{{ $maxReadmit }}</strong>.
+                                                <div class="modal fade" id="readmitModal{{ $log->id }}" tabindex="-1" aria-hidden="true">
+                                                    <div class="modal-dialog modal-dialog-centered">
+                                                        <div class="modal-content border-success">
+                                                            <div class="modal-header bg-success text-white">
+                                                                <h5 class="modal-title">
+                                                                    <i class="fas fa-user-check me-2"></i>Confirm Readmission
+                                                                </h5>
+                                                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                                                             </div>
-                                                            <form id="readmitForm{{ $log->id }}"
-                                                                  action="{{ route('struck-off.readmit', $log->id) }}"
-                                                                  method="POST">
-                                                                @csrf
-                                                                <div class="mb-3">
-                                                                    <label class="form-label fw-bold small">
-                                                                        Readmission Note <span class="text-muted">(optional)</span>
-                                                                    </label>
-                                                                    <textarea name="readmission_note" class="form-control" rows="3"
-                                                                              placeholder="e.g. Paid readmission fee, submitted apology..."></textarea>
+                                                            <div class="modal-body">
+                                                                <div class="alert alert-info border-0">
+                                                                    Readmitting <strong>{{ $log->student?->full_name }}</strong>.
+                                                                    They have been readmitted
+                                                                    <strong>{{ $readmissionsThisYear }}</strong> time(s) this year.
+                                                                    Maximum allowed by policy: <strong>{{ $maxReadmit }}</strong>.
                                                                 </div>
-                                                            </form>
-                                                        </div>
-                                                        <div class="modal-footer">
-                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                            <button type="submit" form="readmitForm{{ $log->id }}" class="btn btn-success">
-                                                                <i class="fas fa-user-check me-1"></i> Confirm Readmission
-                                                            </button>
+                                                                <form id="readmitForm{{ $log->id }}"
+                                                                      action="{{ route('struck-off.readmit', $log->id) }}"
+                                                                      method="POST">
+                                                                    @csrf
+                                                                    <div class="mb-3">
+                                                                        <label class="form-label fw-bold small">
+                                                                            Readmission Note <span class="text-muted">(optional)</span>
+                                                                        </label>
+                                                                        <textarea name="readmission_note" class="form-control" rows="3"
+                                                                                  placeholder="e.g. Paid readmission fee, submitted apology..."></textarea>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+                                                            <div class="modal-footer">
+                                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                                <button type="submit" form="readmitForm{{ $log->id }}" class="btn btn-success">
+                                                                    <i class="fas fa-user-check me-1"></i> Confirm Readmission
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            @endif
+                                        @else
+                                            <span class="badge bg-danger">Struck Off</span>
                                         @endif
                                     @endif
                                 </td>
