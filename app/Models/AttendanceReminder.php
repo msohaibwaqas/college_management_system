@@ -39,4 +39,85 @@ class AttendanceReminder extends Model
     {
         return $this->belongsTo(Subject::class, 'subject_id');
     }
+
+    /**
+     * Check if a teacher has a valid unused reminder for the given class, subject, date and section.
+     */
+    public static function hasUnused(
+        ?int $staffId,
+        int $subjectId,
+        string $date,
+        ?string $class = null,
+        ?int $year = null,
+        ?string $section = null
+    ): bool {
+        if (!$staffId) {
+            return false;
+        }
+
+        $query = static::where('staff_id', $staffId)
+            ->where('subject_id', $subjectId)
+            ->where('attendance_date', $date)
+            ->where('is_used', false);
+
+        if (!empty($class)) {
+            $query->where('class_level', (string) $class);
+        }
+
+        if (!empty($year)) {
+            $query->where('admission_year', $year);
+        }
+
+        if (!empty($section)) {
+            $query->where(function ($q) use ($section) {
+                $q->whereNull('section')
+                  ->orWhere('section', '')
+                  ->orWhere('section', $section);
+            });
+        }
+
+        return $query->exists();
+    }
+
+    /**
+     * Mark matching reminders as used (one-time exception consumed).
+     */
+    public static function consume(
+        ?int $staffId,
+        int $subjectId,
+        string $date,
+        ?string $class = null,
+        ?int $year = null,
+        ?string $section = null
+    ): int {
+        if (!$staffId) {
+            return 0;
+        }
+
+        $query = static::where('staff_id', $staffId)
+            ->where('subject_id', $subjectId)
+            ->where('attendance_date', $date)
+            ->where('is_used', false);
+
+        if (!empty($class)) {
+            $query->where('class_level', (string) $class);
+        }
+
+        if (!empty($year)) {
+            $query->where('admission_year', $year);
+        }
+
+        if (!empty($section)) {
+            $query->where(function ($q) use ($section) {
+                $q->whereNull('section')
+                  ->orWhere('section', '')
+                  ->orWhere('section', $section);
+            });
+        }
+
+        return $query->update([
+            'is_used' => true,
+            'used_at' => now(),
+        ]);
+    }
 }

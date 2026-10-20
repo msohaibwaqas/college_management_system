@@ -270,7 +270,7 @@ class AttendanceController extends Controller
 
             if ($isPastOrSunday || $isPastCutoff) {
                 $staffId = $staff->id ?? null;
-                $hasReminder = $this->hasValidUnusedReminder($staffId, $subjectId, $class, $year, $date, $section);
+                $hasReminder = \App\Models\AttendanceReminder::hasUnused($staffId, $subjectId, $date, $class, $year, $section);
                 if (!$hasReminder) {
                     return redirect()->route('attendance.index')->with('error', 'Attendance marking for this date is restricted. If you received a reminder from the Principal, it may have already been used.');
                 }
@@ -303,81 +303,9 @@ class AttendanceController extends Controller
         // Mark matching reminder as used (one-time exception consumed)
         $staffId = $staff->id ?? null;
         if ($staffId) {
-            $this->consumeReminder($staffId, $subjectId, $class, $year, $date, $section);
+            \App\Models\AttendanceReminder::consume($staffId, $subjectId, $date, $class, $year, $section);
         }
 
         return redirect()->route('attendance.index')->with('success', 'Attendance marked successfully.');
-    }
-
-    /**
-     * Check if a teacher has a valid unused Attendance Reminder for a specific class assignment and date.
-     */
-    private function hasValidUnusedReminder($staffId, $subjectId, $class, $year, $date, $section = null)
-    {
-        if (!$staffId) {
-            return false;
-        }
-
-        $query = \App\Models\AttendanceReminder::where('staff_id', $staffId)
-            ->where('subject_id', $subjectId)
-            ->where('attendance_date', $date)
-            ->where('is_used', false);
-
-        if (!empty($class)) {
-            $query->where('class_level', (string)$class);
-        }
-
-        if (!empty($year)) {
-            $query->where('admission_year', $year);
-        }
-
-        if (!empty($section)) {
-            $query->where(function($q) use ($section) {
-                $q->whereNull('section')
-                  ->orWhere('section', '')
-                  ->orWhere('section', $section);
-            });
-        }
-
-        return $query->exists();
-    }
-
-    /**
-     * Consume a valid Attendance Reminder upon attendance submission.
-     */
-    private function consumeReminder($staffId, $subjectId, $class, $year, $date, $section = null)
-    {
-        if (!$staffId) {
-            return;
-        }
-
-        $query = \App\Models\AttendanceReminder::where('staff_id', $staffId)
-            ->where('subject_id', $subjectId)
-            ->where('attendance_date', $date)
-            ->where('is_used', false);
-
-        if (!empty($class)) {
-            $query->where('class_level', (string)$class);
-        }
-
-        if (!empty($year)) {
-            $query->where('admission_year', $year);
-        }
-
-        if (!empty($section)) {
-            $query->where(function($q) use ($section) {
-                $q->whereNull('section')
-                  ->orWhere('section', '')
-                  ->orWhere('section', $section);
-            });
-        }
-
-        $reminders = $query->get();
-        foreach ($reminders as $reminder) {
-            $reminder->update([
-                'is_used' => true,
-                'used_at' => now(),
-            ]);
-        }
     }
 }
