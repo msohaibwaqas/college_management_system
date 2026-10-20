@@ -113,4 +113,86 @@ class AttendanceCalculatorService
             'deliveredPerSubject' => $deliveredPerSubject,
         ];
     }
+
+    /**
+     * Enrich a collection of students with full_name, recent status indicators, badge styles, and row highlights.
+     *
+     * @param Collection $students
+     * @param int $subjectId
+     * @param string $currentDate
+     * @return Collection
+     */
+    public function enrichStudentsWithRecentAttendance(Collection $students, int $subjectId, string $currentDate): Collection
+    {
+        $studentIds = $students->pluck('id');
+        $recentAttendances = Attendance::whereIn('student_id', $studentIds)
+            ->where('subject_id', $subjectId)
+            ->where('attendance_date', '<', $currentDate)
+            ->orderBy('attendance_date', 'desc')
+            ->get()
+            ->groupBy('student_id');
+
+        foreach ($students as $student) {
+            $student->full_name = trim(($student->first_name ?? '') . ' ' . ($student->last_name ?? ''));
+
+            $history = $recentAttendances->get($student->id, collect());
+            $consecutiveAbsents = 0;
+            $lastStatus = null;
+
+            if ($history->isNotEmpty()) {
+                $lastRecord = $history->first();
+                $lastStatus = strtolower($lastRecord->status);
+
+                if ($lastStatus === 'absent') {
+                    foreach ($history as $record) {
+                        if (strtolower($record->status) === 'absent') {
+                            $consecutiveAbsents++;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Assign status label, badge style, and row highlight style based on recent attendance
+            if ($lastStatus === 'present' || $lastStatus === 'late') {
+                $student->recent_status_code = 'green';
+                $student->recent_status_label = 'Present Last Class';
+                $student->recent_badge_style = 'background-color: #198754 !important; color: #ffffff !important;';
+                $student->row_bg_style = 'background-color: rgba(25, 135, 84, 0.08);';
+            } elseif ($consecutiveAbsents === 1) {
+                $student->recent_status_code = 'yellow';
+                $student->recent_status_label = '1 Day Absent';
+                $student->recent_badge_style = 'background-color: #ffc107 !important; color: #212529 !important;';
+                $student->row_bg_style = 'background-color: rgba(255, 193, 7, 0.15);';
+            } elseif ($consecutiveAbsents === 2) {
+                $student->recent_status_code = 'orange';
+                $student->recent_status_label = '2 Consecutive Absents';
+                $student->recent_badge_style = 'background-color: #fd7e14 !important; color: #ffffff !important;';
+                $student->row_bg_style = 'background-color: rgba(253, 126, 20, 0.15);';
+            } elseif ($consecutiveAbsents === 3) {
+                $student->recent_status_code = 'blue';
+                $student->recent_status_label = '3 Consecutive Absents';
+                $student->recent_badge_style = 'background-color: #0d6efd !important; color: #ffffff !important;';
+                $student->row_bg_style = 'background-color: rgba(13, 110, 253, 0.15);';
+            } elseif ($consecutiveAbsents >= 4) {
+                $student->recent_status_code = 'red';
+                $student->recent_status_label = "{$consecutiveAbsents} Consecutive Absents";
+                $student->recent_badge_style = 'background-color: #dc3545 !important; color: #ffffff !important;';
+                $student->row_bg_style = 'background-color: rgba(220, 53, 69, 0.18);';
+            } elseif ($lastStatus === 'leave') {
+                $student->recent_status_code = 'leave';
+                $student->recent_status_label = 'On Leave Last Class';
+                $student->recent_badge_style = 'background-color: #0dcaf0 !important; color: #000000 !important;';
+                $student->row_bg_style = 'background-color: rgba(13, 202, 240, 0.1);';
+            } else {
+                $student->recent_status_code = 'none';
+                $student->recent_status_label = 'No Record';
+                $student->recent_badge_style = 'background-color: #6c757d !important; color: #ffffff !important;';
+                $student->row_bg_style = '';
+            }
+        }
+
+        return $students;
+    }
 }

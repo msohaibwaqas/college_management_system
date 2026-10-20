@@ -2,17 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Attendance\MarkHeAttendanceAction;
+use App\Exceptions\AttendanceRestrictedException;
+use App\Http\Requests\Attendance\MarkHeAttendanceRequest;
+use App\Models\BsSubject;
 use App\Models\HeAttendance;
 use App\Models\HeTeacherAssignment;
-use App\Models\HeAdmission;
-use App\Models\BsSubject;
-use App\Models\Semester;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class HeAttendanceController extends Controller
 {
+    public function __construct(
+        protected MarkHeAttendanceAction $markHeAttendanceAction
+    ) {}
+
     /**
      * Display teacher's assigned BS/ADP classes
      */
@@ -20,7 +25,7 @@ class HeAttendanceController extends Controller
     {
         $user = Auth::user();
         
-        if (!$user->hasRole('teacher')) {
+        if (!$user || !$user->isTeacher()) {
             return redirect()->route('dashboard')->with('error', 'Access denied.');
         }
 
@@ -68,7 +73,14 @@ class HeAttendanceController extends Controller
     public function create(Request $request)
     {
         $user = Auth::user();
+        if (!$user || !$user->isTeacher()) {
+            return redirect()->route('dashboard')->with('error', 'Access denied.');
+        }
+
         $staff = $user->staff;
+        if (!$staff) {
+            return redirect()->route('dashboard')->with('error', 'No staff record found.');
+        }
 
         $subjectId = $request->query('subject_id');
         $programId = $request->query('program_id');
@@ -80,20 +92,10 @@ class HeAttendanceController extends Controller
             return redirect()->route('he.attendance.index')->with('error', 'Invalid parameters.');
         }
 
-        // Teacher Date Restrictions
-        // Teacher Date Restrictions (Bypassed by Admin/Principal)
-        if ($user->hasRole('teacher') && !$user->is_super_admin && !$user->hasRole('admin') && !$user->hasRole('principal')) {
-            $today = date('Y-m-d');
-            if ($date !== $today) {
-                return redirect()->route('he.attendance.index')->with('error', 'Teachers can only mark attendance for the current date.');
-            }
-            if (date('N', strtotime($date)) == 7) {
-                return redirect()->route('he.attendance.index')->with('error', 'Attendance cannot be marked on Sundays.');
-            // 11:00 PM Cutoff
-            if (date("H") >= 23) {
-                return redirect()->route("he.attendance.index")->with("error", "Attendance marking is closed after 11:00 PM.");
-            }
-            }
+        // Validate teacher date, day, and time restrictions
+        $restrictionError = $this->markHeAttendanceAction->checkRestrictions($user, $date);
+        if ($restrictionError !== null) {
+            return redirect()->route('he.attendance.index')->with('error', $restrictionError);
         }
 
         $subject = BsSubject::find($subjectId);
@@ -136,53 +138,18 @@ class HeAttendanceController extends Controller
     /**
      * Store attendance records
      */
-    public function store(Request $request)
+    public function store(MarkHeAttendanceRequest $request)
     {
-        $request->validate([
-            'subject_id' => 'required|exists:bs_subjects,id',
-            'attendance_date' => 'required|date',
-            'attendance' => 'required|array',
-            'attendance.*' => 'in:present,absent,leave,late',
-        ]);
-
         $user = Auth::user();
-        $staff = $user->staff;
-        $subjectId = $request->subject_id;
-        $date = $request->attendance_date;
 
-        // Teacher Date Restrictions
-        // Teacher Date Restrictions (Bypassed by Admin/Principal)
-        if ($user->hasRole('teacher') && !$user->is_super_admin && !$user->hasRole('admin') && !$user->hasRole('principal')) {
-            $today = date('Y-m-d');
-            if ($date !== $today) {
-                return redirect()->route('he.attendance.index')->with('error', 'Teachers can only mark attendance for the current date.');
-            }
-            if (date('N', strtotime($date)) == 7) {
-                return redirect()->route('he.attendance.index')->with('error', 'Attendance cannot be marked on Sundays.');
-            }
-            // 11:00 PM Cutoff
-            if (date("H") >= 23) {
-                return redirect()->route("he.attendance.index")->with("error", "Attendance marking is closed after 11:00 PM.");
-            }
+        try {
+            $this->markHeAttendanceAction->execute($user, $request->validated());
+            return redirect()->route('he.attendance.index')
+                ->with('success', 'Attendance marked successfully.');
+        } catch (AttendanceRestrictedException $e) {
+            return redirect()->route('he.attendance.index')
+                ->with('error', $e->getMessage());
         }
-
-        foreach ($request->attendance as $heAdmissionId => $status) {
-            HeAttendance::updateOrCreate(
-                [
-                    'he_admission_id' => $heAdmissionId,
-                    'bs_subject_id' => $subjectId,
-                    'attendance_date' => $date,
-                ],
-                [
-                    'staff_id' => $staff->id,
-                    'status' => $status,
-                    'remarks' => $request->remarks[$heAdmissionId] ?? null,
-                ]
-            );
-        }
-
-        return redirect()->route('he.attendance.index')
-            ->with('success', 'Attendance marked successfully.');
     }
 
     /**
@@ -199,7 +166,7 @@ class HeAttendanceController extends Controller
         $query = HeAttendance::with(['heAdmission.student', 'bsSubject', 'staff']);
 
         $user = auth()->user();
-        if ($user->hasRole('teacher') && !$user->is_super_admin && !$user->hasRole('admin')) {
+        if ($user && $user->isTeacher() && !$user->isAdministrativeStaff()) {
             $query->where('staff_id', ($user->staff->id ?? 0));
         }
 
