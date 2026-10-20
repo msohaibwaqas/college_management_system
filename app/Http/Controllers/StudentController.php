@@ -6,7 +6,6 @@ use App\Models\Student;
 use App\Models\StudentAttribute;
 use App\Models\Father;
 use App\Models\Contact;
-use App\Models\Admission;
 use App\Models\Admissions;
 use App\Models\SscRecord;
 use App\Models\Subject;

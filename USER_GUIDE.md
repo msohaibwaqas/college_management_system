@@ -2483,8 +2483,6 @@ graph TD
 - `BiseScraperController.php`
 - `DatesheetController.php`
 - `TimeSlotController.php`
-- `TeachersController.php`
-- `StudentsController.php`
 - `ParentPortalController.php`
 - `AlumniController.php`
 - `FeeHeadController.php`
