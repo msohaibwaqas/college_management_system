@@ -22,28 +22,35 @@ class StruckOffController extends Controller
     {
         $user     = Auth::user();
         $staff    = $user->staff;
+        $staffId  = $staff ? $staff->id : null;
         $settings = StruckOffSetting::getSettings();
 
-        // 1. Parse parameters
-        // Handle composite selector format: subject_id:class:year
+        // 1. Min Absents is strictly controlled by Admin policy
+        $threshold = (int) $settings->absent_threshold;
+        if ($threshold < 1) {
+            $threshold = 10;
+        }
+
+        // 2. Parse request parameters
+        $year = $request->filled('year') ? (int) $request->query('year') : null;
+        $month = $request->query('month', $settings->calculation_period === 'monthly' ? now()->format('Y-m') : 'all');
+
+        // Handle class_subject format: subject_id:class:year
         if ($request->filled('class_subject') && str_contains($request->class_subject, ':')) {
-            $parts = explode(':', $request->class_subject);
+            $parts     = explode(':', $request->class_subject);
             $subjectId = (int) ($parts[0] ?? 0);
             $class     = $parts[1] ?? null;
-            $year      = (int) ($parts[2] ?? 0);
+            $optYear   = (int) ($parts[2] ?? 0);
+            // If year wasn't explicitly set in query, use option's year
+            if (!$year && $optYear > 0) {
+                $year = $optYear;
+            }
         } else {
             $subjectId = $request->filled('subject_id') ? (int) $request->query('subject_id') : null;
             $class     = $request->query('class');
-            $year      = $request->filled('year') ? (int) $request->query('year') : null;
         }
 
-        $month     = $request->query('month', $settings->calculation_period === 'monthly' ? now()->format('Y-m') : 'all');
-        $threshold = (int) $request->query('threshold', $settings->absent_threshold);
-        if ($threshold < 1) {
-            $threshold = $settings->absent_threshold;
-        }
-
-        // 2. Fetch all assigned classes & subjects for this user/staff
+        // 3. Fetch ONLY assigned classes & subjects for this specific teacher
         $subjectsQuery = DB::table('student_teacher_subjects')
             ->join('subjects', 'student_teacher_subjects.subject_id', '=', 'subjects.id')
             ->join('admissions', 'student_teacher_subjects.student_id', '=', 'admissions.student_id')
@@ -52,8 +59,9 @@ class StruckOffController extends Controller
             ->whereNull('student_teacher_subjects.deleted_at')
             ->whereNull('admissions.deleted_at');
 
-        if ($staff && !$user->hasRole('admin') && !$user->is_super_admin) {
-            $subjectsQuery->where('student_teacher_subjects.staff_id', $staff->id);
+        // Strictly enforce teacher assignment filter if user has a linked staff record
+        if ($staffId) {
+            $subjectsQuery->where('student_teacher_subjects.staff_id', $staffId);
         }
 
         $mySubjects = $subjectsQuery->select(
@@ -71,21 +79,32 @@ class StruckOffController extends Controller
 
         $availableYears = $mySubjects->pluck('admission_year')->filter()->unique()->values()->sortDesc();
 
-        // If no year selected yet, default to the first available year
+        // Default to first available year if none selected
         if (!$year && $availableYears->isNotEmpty()) {
             $year = (int) $availableYears->first();
         }
 
-        // If year is selected but subject is not, pick the first subject for that year
-        if ($year && !$subjectId) {
-            $firstSub = $mySubjects->where('admission_year', $year)->first();
-            if ($firstSub) {
-                $subjectId = (int) $firstSub->subject_id;
-                $class     = $firstSub->current_class;
-            }
+        // Filter subjects to ONLY the classes belonging to the selected batch/year
+        $subjectsForYear = $mySubjects->where('admission_year', $year)->values();
+
+        // Ensure selected subject belongs to this batch
+        $validCurrentSubject = $subjectsForYear->first(function ($item) use ($subjectId, $class) {
+            return (int) $item->subject_id === (int) $subjectId && (!$class || $item->current_class == $class);
+        });
+
+        if ($validCurrentSubject) {
+            $subjectId = (int) $validCurrentSubject->subject_id;
+            $class     = $validCurrentSubject->current_class;
+        } elseif ($subjectsForYear->isNotEmpty()) {
+            $firstSub  = $subjectsForYear->first();
+            $subjectId = (int) $firstSub->subject_id;
+            $class     = $firstSub->current_class;
+        } else {
+            $subjectId = null;
+            $class     = null;
         }
 
-        // Available months from attendance records
+        // 4. Available months from attendance records
         $availableMonths = DB::table('attendances')
             ->select(DB::raw("DATE_FORMAT(attendance_date, '%Y-%m') as m"))
             ->distinct()
@@ -93,7 +112,7 @@ class StruckOffController extends Controller
             ->limit(12)
             ->pluck('m');
 
-        // 3. Query eligible students
+        // 5. Query eligible students strictly assigned to this teacher
         $eligibleStudents = collect();
 
         if ($subjectId && $year) {
@@ -123,8 +142,9 @@ class StruckOffController extends Controller
                 ->whereNull('admissions.deleted_at')
                 ->where('abs.absence_count', '>=', $threshold);
 
-            if ($staff && !$user->hasRole('admin') && !$user->is_super_admin) {
-                $eligibleQuery->where('student_teacher_subjects.staff_id', $staff->id);
+            // Strictly filter by this specific teacher's assignments
+            if ($staffId) {
+                $eligibleQuery->where('student_teacher_subjects.staff_id', $staffId);
             }
 
             if ($class) {
@@ -166,6 +186,7 @@ class StruckOffController extends Controller
 
         return view('struck-off.teacher', compact(
             'mySubjects',
+            'subjectsForYear',
             'eligibleStudents',
             'selectedSubjectId',
             'selectedYear',
@@ -174,7 +195,8 @@ class StruckOffController extends Controller
             'selectedThreshold',
             'availableYears',
             'availableMonths',
-            'settings'
+            'settings',
+            'staff'
         ));
     }
 
@@ -186,34 +208,34 @@ class StruckOffController extends Controller
         $request->validate([
             'student_id'  => 'required|exists:students,id',
             'subject_id'  => 'required|exists:subjects,id',
-            'threshold'   => 'nullable|integer|min:1',
             'month'       => 'nullable|string',
             'reason'      => 'nullable|string|max:500',
         ]);
 
         $user      = Auth::user();
         $staff     = $user->staff;
+        $staffId   = $staff ? $staff->id : null;
         $studentId = (int) $request->student_id;
         $subjectId = (int) $request->subject_id;
         $settings  = StruckOffSetting::getSettings();
-        $threshold = (int) $request->input('threshold', $settings->absent_threshold);
+        $threshold = (int) $settings->absent_threshold; // Admin-set threshold only
         $month     = $request->input('month');
 
-        // Verify assignment if pure teacher
-        if ($staff && !$user->hasRole('admin') && !$user->is_super_admin) {
+        // Strictly verify assignment to this teacher if staff record exists
+        if ($staffId) {
             $assignment = DB::table('student_teacher_subjects')
-                ->where('staff_id', $staff->id)
+                ->where('staff_id', $staffId)
                 ->where('student_id', $studentId)
                 ->where('subject_id', $subjectId)
                 ->whereNull('deleted_at')
                 ->first();
 
             if (!$assignment) {
-                return back()->with('error', 'You are not authorized to strike off this student.');
+                return back()->with('error', 'You are not assigned to teach this student in this subject.');
             }
         }
 
-        // Verify absence count
+        // Verify absence count meets policy threshold
         $attQuery = Attendance::where('student_id', $studentId)
             ->where('subject_id', $subjectId)
             ->where('status', 'absent');
@@ -225,7 +247,7 @@ class StruckOffController extends Controller
         $absenceCount = $attQuery->count();
 
         if ($absenceCount < $threshold) {
-            return back()->with('error', "Student has {$absenceCount} absents in this subject, which is below the required threshold of {$threshold} to strike off.");
+            return back()->with('error', "Student has {$absenceCount} absents in this subject, which is below the required policy threshold of {$threshold} to strike off.");
         }
 
         // Check if already struck off
@@ -246,13 +268,13 @@ class StruckOffController extends Controller
             return back()->with('error', 'No active admission record found for this student.');
         }
 
-        $staffId = $staff ? $staff->id : ($user->staff_id ?? 1);
+        $recorderStaffId = $staffId ?? ($user->staff_id ?? 1);
 
-        DB::transaction(function () use ($studentId, $admission, $staffId, $subjectId, $absenceCount, $request) {
+        DB::transaction(function () use ($studentId, $admission, $recorderStaffId, $subjectId, $absenceCount, $request) {
             StudentStruckOffLog::create([
                 'student_id'             => $studentId,
                 'admission_id'           => $admission->id,
-                'struck_off_by'          => $staffId,
+                'struck_off_by'          => $recorderStaffId,
                 'subject_id'             => $subjectId,
                 'absence_count_at_strike'=> $absenceCount,
                 'struck_off_at'          => now(),

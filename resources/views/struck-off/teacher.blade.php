@@ -10,13 +10,13 @@
                 <i class="fas fa-user-slash text-danger me-2"></i>Struck-Off — Eligible Students
             </h1>
             <p class="text-muted small mb-0 mt-1">
-                Students exceeding the absence threshold (default <strong>&ge; {{ $settings->absent_threshold }} absents</strong>) in a specific subject. You may strike off any eligible student.
+                Viewing assigned students exceeding the policy absence threshold (<strong>&ge; {{ $settings->absent_threshold }} absents</strong>).
             </p>
         </div>
         <div class="d-flex gap-2">
             @if(in_array(Auth::user()->roles->pluck('name')->first() ?? '', ['admin', 'principal', 'clerk', 'super_admin']) || Auth::user()->is_super_admin)
                 <a href="{{ route('struck-off.index') }}" class="btn btn-outline-danger btn-sm">
-                    <i class="fas fa-sliders-h me-1"></i> Struck-Off Mgmt &amp; Rules
+                    <i class="fas fa-sliders-h me-1"></i> Policy Rules &amp; Limits
                 </a>
             @endif
             <a href="{{ route('attendance.index') }}" class="btn btn-outline-secondary btn-sm">
@@ -42,7 +42,10 @@
     <div class="card shadow-sm mb-4 border-start-warning">
         <div class="card-header bg-warning bg-opacity-10 border-warning py-3">
             <h6 class="m-0 fw-bold text-dark">
-                <i class="fas fa-filter text-warning me-2"></i>Filter Class, Subject &amp; Absence Threshold
+                <i class="fas fa-filter text-warning me-2"></i>Select Class &amp; Subject
+                @if($staff)
+                    <span class="badge bg-secondary ms-2 fw-normal">{{ $staff->full_name }}</span>
+                @endif
             </h6>
         </div>
         <div class="card-body">
@@ -50,43 +53,42 @@
                 {{-- 1. Admission Year / Batch --}}
                 <div class="col-md-3">
                     <label class="form-label fw-bold small text-muted">1. Admission Year (Batch)</label>
-                    <select name="year" id="yearSelect" class="form-select" required onchange="handleYearChange(this.value)">
+                    <select name="year" id="yearSelect" class="form-select" required onchange="this.form.submit()">
                         <option value="">— Select Batch Year —</option>
                         @foreach($availableYears as $yr)
                             <option value="{{ $yr }}" {{ ($selectedYear == $yr) ? 'selected' : '' }}>
-                                Batch {{ $yr }} ({{ $yr == 2026 ? '1st Year / 11th' : ($yr == 2025 ? '2nd Year / 12th' : 'Class of ' . $yr) }})
+                                Batch {{ $yr }} ({{ $yr == 2026 ? 'Class 11th' : ($yr == 2025 ? 'Class 12th' : 'Batch ' . $yr) }})
                             </option>
                         @endforeach
                     </select>
                 </div>
 
-                {{-- 2. Class & Subject --}}
+                {{-- 2. Class & Subject (Filtered exclusively to the selected batch) --}}
                 <div class="col-md-4">
                     <label class="form-label fw-bold small text-muted">2. Subject &amp; Class</label>
-                    <select name="class_subject" id="classSubjectSelect" class="form-select" required onchange="handleClassSubjectChange(this)">
-                        <option value="">— Select Class &amp; Subject —</option>
-                        @foreach($mySubjects as $sub)
-                            @php
-                                $valKey = $sub->subject_id . ':' . $sub->current_class . ':' . $sub->admission_year;
-                                $isSelected = ($selectedSubjectId == $sub->subject_id && $selectedYear == $sub->admission_year && (!$selectedClass || $selectedClass == $sub->current_class));
-                            @endphp
-                            <option value="{{ $valKey }}"
-                                    data-year="{{ $sub->admission_year }}"
-                                    data-subject="{{ $sub->subject_id }}"
-                                    data-class="{{ $sub->current_class }}"
-                                    {{ $isSelected ? 'selected' : '' }}>
-                                Class {{ $sub->current_class }}th ({{ $sub->admission_year }}) — {{ $sub->subject_name }} ({{ $sub->student_count }} students)
-                            </option>
-                        @endforeach
+                    <select name="class_subject" id="classSubjectSelect" class="form-select" required onchange="this.form.submit()">
+                        @if($subjectsForYear->isEmpty())
+                            <option value="">— No subjects assigned for this batch —</option>
+                        @else
+                            @foreach($subjectsForYear as $sub)
+                                @php
+                                    $valKey = $sub->subject_id . ':' . $sub->current_class . ':' . $sub->admission_year;
+                                    $isSelected = ($selectedSubjectId == $sub->subject_id && (!$selectedClass || $selectedClass == $sub->current_class));
+                                @endphp
+                                <option value="{{ $valKey }}" {{ $isSelected ? 'selected' : '' }}>
+                                    Class {{ $sub->current_class }}th — {{ $sub->subject_name }} ({{ $sub->student_count }} students)
+                                </option>
+                            @endforeach
+                        @endif
                     </select>
-                    <input type="hidden" name="subject_id" id="hiddenSubjectId" value="{{ $selectedSubjectId }}">
-                    <input type="hidden" name="class" id="hiddenClass" value="{{ $selectedClass }}">
+                    <input type="hidden" name="subject_id" value="{{ $selectedSubjectId }}">
+                    <input type="hidden" name="class" value="{{ $selectedClass }}">
                 </div>
 
                 {{-- 3. Attendance Period / Month --}}
                 <div class="col-md-3">
                     <label class="form-label fw-bold small text-muted">3. Attendance Period</label>
-                    <select name="month" class="form-select">
+                    <select name="month" class="form-select" onchange="this.form.submit()">
                         <option value="all" {{ ($selectedMonth === 'all') ? 'selected' : '' }}>Entire Academic Session</option>
                         @foreach($availableMonths as $m)
                             @php
@@ -103,15 +105,12 @@
                     </select>
                 </div>
 
-                {{-- 4. Custom Absent Threshold --}}
+                {{-- 4. Min Absents (Set by Admin Policy - Non-editable by Teacher) --}}
                 <div class="col-md-2">
                     <label class="form-label fw-bold small text-muted">Min Absents</label>
-                    <div class="input-group">
-                        <input type="number" name="threshold" class="form-control"
-                               value="{{ $selectedThreshold }}" min="1" max="100" required title="Minimum absents threshold">
-                        <button type="submit" class="btn btn-primary" title="Search Eligible Students">
-                            <i class="fas fa-search"></i>
-                        </button>
+                    <div class="form-control bg-light text-center fw-bold text-danger d-flex align-items-center justify-content-center"
+                         title="Configured by Admin in College Policy Rules">
+                        <i class="fas fa-lock text-muted me-1 small"></i> &ge; {{ $settings->absent_threshold }} Absents
                     </div>
                 </div>
             </form>
@@ -126,12 +125,12 @@
                 <h6 class="m-0 fw-bold text-danger">
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     Students Eligible for Struck-Off
-                    <span class="badge bg-danger ms-2">{{ $eligibleStudents->count() }} Found</span>
+                    <span class="badge bg-danger ms-2">{{ $eligibleStudents->count() }} Eligible</span>
                 </h6>
                 <div class="text-muted small mt-1">
-                    Showing students with <strong>&ge; {{ $selectedThreshold }} absents</strong> in
+                    Showing students assigned to you with <strong>&ge; {{ $settings->absent_threshold }} absents</strong> in
                     @php
-                        $activeSubject = $mySubjects->firstWhere('subject_id', $selectedSubjectId);
+                        $activeSubject = $subjectsForYear->firstWhere('subject_id', $selectedSubjectId);
                     @endphp
                     <strong>{{ $activeSubject->subject_name ?? 'Subject #' . $selectedSubjectId }}</strong>
                     (Class {{ $selectedClass ?? ($activeSubject->current_class ?? '') }}th, Batch {{ $selectedYear }})
@@ -144,7 +143,7 @@
             </div>
             <div>
                 <span class="badge bg-light text-dark border p-2">
-                    <i class="fas fa-info-circle text-primary me-1"></i> Policy Limit: Max {{ $settings->max_readmissions_per_year }} readmissions/year
+                    <i class="fas fa-info-circle text-primary me-1"></i> Policy: &ge; {{ $settings->absent_threshold }} absents | Max {{ $settings->max_readmissions_per_year }} readmissions/yr
                 </span>
             </div>
         </div>
@@ -154,7 +153,7 @@
                     <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
                     <h5 class="fw-bold text-dark">No Students Exceed Threshold</h5>
                     <p class="mb-0 text-muted">
-                        No students in Batch {{ $selectedYear }} exceeded {{ $selectedThreshold }} absents in this subject
+                        None of your assigned students in Class {{ $selectedClass }}th (Batch {{ $selectedYear }}) exceeded the policy threshold of {{ $settings->absent_threshold }} absents
                         @if($selectedMonth && $selectedMonth !== 'all')
                             for {{ \Carbon\Carbon::createFromFormat('Y-m', $selectedMonth)->format('F Y') }}.
                         @else
@@ -239,12 +238,11 @@
                                                             @csrf
                                                             <input type="hidden" name="student_id" value="{{ $s->student_id }}">
                                                             <input type="hidden" name="subject_id" value="{{ $selectedSubjectId }}">
-                                                            <input type="hidden" name="threshold" value="{{ $selectedThreshold }}">
                                                             <input type="hidden" name="month" value="{{ $selectedMonth }}">
                                                             <div class="mb-3">
                                                                 <label class="form-label fw-bold small">Reason for Strike-Off <span class="text-muted">(optional)</span></label>
                                                                 <textarea name="reason" class="form-control" rows="3"
-                                                                          placeholder="e.g. Exceeded {{ $selectedThreshold }} absents threshold..."></textarea>
+                                                                          placeholder="e.g. Exceeded {{ $settings->absent_threshold }} absents threshold..."></textarea>
                                                             </div>
                                                         </form>
                                                     </div>
@@ -270,46 +268,4 @@
     @endif
 
 </div>
-
-<script>
-function handleYearChange(newYear) {
-    var classSubSelect = document.getElementById('classSubjectSelect');
-    var options = classSubSelect.options;
-    var foundFirst = false;
-
-    for (var i = 1; i < options.length; i++) {
-        var optYear = options[i].getAttribute('data-year');
-        if (!newYear || optYear === newYear) {
-            options[i].style.display = '';
-            if (!foundFirst) {
-                options[i].selected = true;
-                foundFirst = true;
-            }
-        } else {
-            options[i].style.display = 'none';
-        }
-    }
-
-    if (foundFirst) {
-        handleClassSubjectChange(classSubSelect);
-    } else {
-        document.getElementById('hiddenSubjectId').value = '';
-        document.getElementById('hiddenClass').value = '';
-        document.getElementById('filterForm').submit();
-    }
-}
-
-function handleClassSubjectChange(selectElem) {
-    var selectedOpt = selectElem.options[selectElem.selectedIndex];
-    if (selectedOpt && selectedOpt.value) {
-        var parts = selectedOpt.value.split(':');
-        document.getElementById('hiddenSubjectId').value = parts[0] || '';
-        document.getElementById('hiddenClass').value = parts[1] || '';
-        if (parts[2]) {
-            document.getElementById('yearSelect').value = parts[2];
-        }
-        document.getElementById('filterForm').submit();
-    }
-}
-</script>
 @endsection
