@@ -13,6 +13,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use App\Services\FileUploadService;
+use App\Http\Requests\Staff\StoreStaffRequest;
+use App\Http\Requests\Staff\UpdateStaffRequest;
+use App\Actions\Staff\CreateStaffAction;
+use App\Actions\Staff\UpdateStaffAction;
 
 class StaffController extends Controller
 {
@@ -71,92 +75,15 @@ class StaffController extends Controller
     }
 
     /**
-     * Store a newly created staff
+     * Store new staff
      */
-    public function store(Request $request)
+    public function store(StoreStaffRequest $request, CreateStaffAction $createStaffAction)
     {
-        $request->validate([
-            'staff_id' => 'required|string|max:50|unique:staff,staff_id',
-            'first_name' => ['required', 'string', 'max:80', 'regex:/^[a-zA-Z\s]+$/'],
-            'last_name' => ['nullable', 'string', 'max:80', 'regex:/^[a-zA-Z\s]*$/'],
-            'father_name' => ['required', 'string', 'max:120', 'regex:/^[a-zA-Z\s]+$/'],
-            'cnic' => ['required', 'string', 'max:15', 'unique:staff,cnic', 'regex:/^\d{5}-\d{7}-\d{1}$/'],
-            'contact_number' => ['nullable', 'string', 'max:20', 'regex:/^03\d{2}-\d{7}$/'],
-            'whatsapp_number' => ['nullable', 'string', 'max:20', 'regex:/^03\d{2}-\d{7}$/'],
-            'date_of_birth' => 'required|date',
-            'category' => 'required|in:teaching,non_teaching',
-            'designation' => 'required|string|max:100',
-            'bps' => 'required|integer|min:1|max:22',
-            'gender' => 'required|in:male,female',
-            'status' => 'required|in:active,left,transferred,retired,suspended',
-            'email' => 'nullable|email|max:120|unique:staff,email',
-            'picture' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-        ], [
-            'first_name.regex' => 'The first name must only contain letters and spaces.',
-            'last_name.regex' => 'The last name must only contain letters and spaces.',
-            'father_name.regex' => 'The father name must only contain letters and spaces.',
-            'cnic.regex' => 'The CNIC must follow the format 00000-0000000-0.',
-            'contact_number.regex' => 'The contact number must follow the format 03XX-XXXXXXX.',
-            'whatsapp_number.regex' => 'The WhatsApp number must follow the format 03XX-XXXXXXX.',
-        ]);
-
-        DB::transaction(function () use ($request) {
-            // Auto-set designation_id based on designation string
-            $designationId = null;
-            if ($request->filled('designation')) {
-                $designation = \App\Models\Designation::where('name', $request->designation)->first();
-                if ($designation) {
-                    $designationId = $designation->id;
-                }
-            }
-
-            $staffData = [
-                'staff_id' => $request->staff_id,
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'father_name' => $request->father_name,
-                'cnic' => $request->cnic,
-                'contact_number' => $request->contact_number,
-                'address' => $request->address,
-                'date_of_birth' => $request->date_of_birth,
-                'blood_group_id' => $request->blood_group_id,
-                'whatsapp_number' => $request->whatsapp_number,
-                'email' => $request->email,
-                'category' => $request->category,
-                'highest_qualification' => $request->highest_qualification,
-                'designation' => $request->designation,
-                'designation_id' => $designationId,
-                'bps' => $request->bps,
-                'entry_date_govt_service' => $request->entry_date_govt_service,
-                'hed_joining_date' => $request->hed_joining_date,
-                'current_college_joining_date' => $request->current_college_joining_date,
-                'status' => $request->status,
-                'gender' => $request->gender,
-                'created_by' => Auth::id(),
-            ];
-
-            if ($request->hasFile('picture')) {
-                $staffData['picture'] = $this->fileUploadService->upload($request->file('picture'), 'staff_pictures');
-            }
-
-            $staff = Staff::create($staffData);
-
-            // Add subject specializations if teaching staff
-            if ($request->category == 'teaching' && $request->has('subject_specializations')) {
-                foreach ($request->subject_specializations as $subjectId) {
-                    StaffSubjectSpecialization::create([
-                        'staff_id' => $staff->id,
-                        'subject_id' => $subjectId,
-                        'created_by' => Auth::id(),
-                    ]);
-                }
-            }
-
-            // Add BS subject specializations if teaching staff
-            if ($request->category == 'teaching' && $request->has('bs_subject_specializations')) {
-                $staff->bsSubjects()->sync($request->bs_subject_specializations);
-            }
-        });
+        $createStaffAction->execute(
+            $request->validated(),
+            $request->file('picture'),
+            Auth::id()
+        );
 
         return redirect()->route('staff.index')->with('success', 'Staff member added successfully!');
     }
@@ -204,149 +131,17 @@ class StaffController extends Controller
         return view('staff.edit', compact('staff', 'bloodGroups', 'subjects', 'currentSubjects', 'designations', 'bsSubjects', 'currentBsSubjects'));
     }
 
-    public function update(Request $request, Staff $staff)
+    /**
+     * Update specified staff
+     */
+    public function update(UpdateStaffRequest $request, Staff $staff, UpdateStaffAction $updateStaffAction)
     {
-        $request->validate([
-            'staff_id' => 'required|string|max:50|unique:staff,staff_id,' . $staff->id,
-            'first_name' => ['required', 'string', 'max:80', 'regex:/^[a-zA-Z\s]+$/'],
-            'last_name' => ['nullable', 'string', 'max:80', 'regex:/^[a-zA-Z\s]*$/'],
-            'father_name' => ['required', 'string', 'max:120', 'regex:/^[a-zA-Z\s]+$/'],
-            'cnic' => ['required', 'string', 'max:15', 'unique:staff,cnic,' . $staff->id, 'regex:/^\d{5}-\d{7}-\d{1}$/'],
-            'contact_number' => ['nullable', 'string', 'max:20', 'regex:/^03\d{2}-\d{7}$/'],
-            'whatsapp_number' => ['nullable', 'string', 'max:20', 'regex:/^03\d{2}-\d{7}$/'],
-            'category' => 'required|in:teaching,non_teaching',
-            'designation' => 'required|string|max:100',
-            'bps' => 'required|integer|min:1|max:22',
-            'gender' => 'required|in:male,female',
-            'status' => 'required|in:active,left,transferred,retired,suspended',
-            'picture' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-        ], [
-            'first_name.regex' => 'The first name must only contain letters and spaces.',
-            'last_name.regex' => 'The last name must only contain letters and spaces.',
-            'father_name.regex' => 'The father name must only contain letters and spaces.',
-            'cnic.regex' => 'The CNIC must follow the format 00000-0000000-0.',
-            'contact_number.regex' => 'The contact number must follow the format 03XX-XXXXXXX.',
-            'whatsapp_number.regex' => 'The WhatsApp number must follow the format 03XX-XXXXXXX.',
-        ]);
-
-        DB::transaction(function () use ($request, $staff) {
-            // Auto-set designation_id based on designation string
-            $designationId = null;
-            if ($request->filled('designation')) {
-                $designation = \App\Models\Designation::where('name', $request->designation)->first();
-                if ($designation) {
-                    $designationId = $designation->id;
-                }
-            }
-
-            $updateData = [
-                'staff_id' => $request->staff_id,
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'father_name' => $request->father_name,
-                'cnic' => $request->cnic,
-                'contact_number' => $request->contact_number,
-                'address' => $request->address,
-                'date_of_birth' => $request->date_of_birth,
-                'blood_group_id' => $request->blood_group_id,
-                'whatsapp_number' => $request->whatsapp_number,
-                'email' => $request->email,
-                'category' => $request->category,
-                'highest_qualification' => $request->highest_qualification,
-                'designation' => $request->designation,
-                'designation_id' => $designationId, // Auto-set designation_id
-                'bps' => $request->bps,
-                'entry_date_govt_service' => $request->entry_date_govt_service,
-                'hed_joining_date' => $request->hed_joining_date,
-                'current_college_joining_date' => $request->current_college_joining_date,
-                'status' => $request->status,
-                'gender' => $request->gender,
-                'updated_by' => Auth::id(),
-            ];
-
-            // Handle picture upload
-            if ($request->hasFile('picture')) {
-                $updateData['picture'] = $this->fileUploadService->update(
-                    $request->file('picture'),
-                    $staff->picture,
-                    'staff_pictures'
-                );
-            }
-
-            $staff->update($updateData);
-
-            // Sync user account status
-            if ($staff->user) {
-                $userStatus = $staff->status === 'active' ? 'active' : 'suspended';
-                if ($staff->user->status !== $userStatus) {
-                    $staff->user->update(['status' => $userStatus]);
-                }
-            }
-
-            // Update subject specializations
-            if ($request->category == 'teaching') {
-                \App\Models\StaffSubjectSpecialization::where('staff_id', $staff->id)->forceDelete();
-                
-                if ($request->has('subject_specializations')) {
-                    foreach ($request->subject_specializations as $subjectId) {
-                        \App\Models\StaffSubjectSpecialization::create([
-                            'staff_id' => $staff->id,
-                            'subject_id' => $subjectId,
-                            'created_by' => Auth::id(),
-                        ]);
-                    }
-                }
-
-                // Sync BS subject specializations
-                $staff->bsSubjects()->sync($request->bs_subject_specializations ?? []);
-            } else {
-                // Clear BS subjects if not teaching
-                $staff->bsSubjects()->detach();
-            }
-
-            // Update Academic Qualifications
-            if ($request->has('qualifications')) {
-                \App\Models\StaffAcademicQualification::where('staff_id', $staff->id)->forceDelete();
-                foreach ($request->qualifications as $qual) {
-                    if (!empty($qual['degree_level'])) {
-                        \App\Models\StaffAcademicQualification::create(array_merge($qual, [
-                            'staff_id' => $staff->id,
-                            'created_by' => Auth::id()
-                        ]));
-                    }
-                }
-            }
-
-            // Update Promotion History
-            if ($request->has('promotions')) {
-                \App\Models\StaffPromotionHistory::where('staff_id', $staff->id)->forceDelete();
-                foreach ($request->promotions as $index => $promo) {
-                    if (!empty($promo['new_designation'])) {
-                        \App\Models\StaffPromotionHistory::create(array_merge($promo, [
-                            'staff_id' => $staff->id,
-                            'promotion_number' => $index + 1,
-                            'previous_designation' => $promo['previous_designation'] ?: 'N/A',
-                            'previous_bps' => $promo['previous_bps'] ?: 0,
-                            'promotion_date' => $promo['promotion_date'] ?: now(),
-                            'created_by' => Auth::id()
-                        ]));
-                    }
-                }
-            }
-
-            // Update Service History
-            if ($request->has('service_history')) {
-                \App\Models\StaffServiceHistory::where('staff_id', $staff->id)->forceDelete();
-                foreach ($request->service_history as $service) {
-                    if (!empty($service['institution_name'])) {
-                        \App\Models\StaffServiceHistory::create(array_merge($service, [
-                            'staff_id' => $staff->id,
-                            'created_by' => Auth::id()
-                        ]));
-                    }
-                }
-            }
-        });
+        $updateStaffAction->execute(
+            $staff,
+            $request->validated(),
+            $request->file('picture'),
+            Auth::id()
+        );
 
         return redirect()->route('staff.index')->with('success', 'Staff member updated successfully!');
     }
