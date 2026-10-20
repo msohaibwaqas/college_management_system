@@ -12,8 +12,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+use App\Services\SeatingPlanService;
+
 class HeSeatingPlanController extends Controller
 {
+    public function __construct(
+        protected SeatingPlanService $seatingPlanService
+    ) {}
+
     /**
      * Display a listing of seating plans.
      */
@@ -64,32 +70,17 @@ class HeSeatingPlanController extends Controller
             return back()->with('error', 'Seating plan for this exam already exists.');
         }
 
-        // 1. Get Students enrolled in this subject for this semester
-        $students = HeStudentSubject::with('heAdmission.student')
-            ->where('bs_subject_id', $datesheet->bs_subject_id)
-            ->where('semester_no', $datesheet->semester_no)
-            ->where('status', 'Enrolled')
-            ->whereHas('heAdmission', function($q) use ($datesheet) {
-                $q->where('program_id', $datesheet->program_id)
-                  ->where('admission_year', $datesheet->academic_year)
-                  ->whereIn('status', ['Admitted', 'Active']);
-            })
-            ->get()
-            ->sortBy(function($item) {
-                return $item->heAdmission->college_roll_no ?? 'ZZZ' . $item->id;
-            });
+        $students = $this->seatingPlanService->getHeCandidatesForDatesheet($datesheet);
 
         if ($students->isEmpty()) {
             return back()->with('error', 'No enrolled students found for this subject/semester.');
         }
 
-        // 2. Get Active Rooms
         $rooms = Room::where('is_active', true)->forExams()->orderBy('name')->get();
         if ($rooms->isEmpty()) {
             return back()->with('error', 'No active rooms available.');
         }
 
-        // 3. Distribute
         DB::beginTransaction();
         try {
             $plan = HeSeatingPlan::create([
@@ -100,30 +91,18 @@ class HeSeatingPlanController extends Controller
                 'updated_by' => Auth::id(),
             ]);
 
-            $studentIndex = 0;
-            $totalStudents = $students->count();
-            $studentsArray = $students->values()->all();
-
-            foreach ($rooms as $room) {
-                if ($studentIndex >= $totalStudents) break;
-
-                $capacity = $room->capacity;
-                $seatedCount = 0;
-
-                while ($seatedCount < $capacity && $studentIndex < $totalStudents) {
-                    $studentSubject = $studentsArray[$studentIndex];
-                    
+            $this->seatingPlanService->allocateSeats(
+                $students,
+                $rooms,
+                function ($studentSubject, $room, $seatNo) use ($plan) {
                     HeSeatingPlanDetail::create([
                         'he_seating_plan_id' => $plan->id,
                         'he_admission_id' => $studentSubject->he_admission_id,
                         'room_id' => $room->id,
-                        'seat_number' => $seatedCount + 1,
+                        'seat_number' => $seatNo,
                     ]);
-
-                    $studentIndex++;
-                    $seatedCount++;
                 }
-            }
+            );
 
             DB::commit();
             return redirect()->route('he.seating_plans.index')->with('success', 'Seating plan generated successfully.');

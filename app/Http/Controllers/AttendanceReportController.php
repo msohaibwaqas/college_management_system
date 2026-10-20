@@ -10,8 +10,14 @@ use App\Models\InstituteSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+use App\Services\AcademicCalendarService;
+
 class AttendanceReportController extends Controller
 {
+    public function __construct(
+        protected AcademicCalendarService $academicCalendarService
+    ) {}
+
     /**
      * Show attendance report form for HSSC
      */
@@ -36,10 +42,7 @@ class AttendanceReportController extends Controller
                     ->where('staff_id', $staffId);
             })->orderBy('name')->get();
         } else {
-            $admissionYears = Admissions::select('admission_year')
-                ->distinct()
-                ->orderByDesc('admission_year')
-                ->pluck('admission_year');
+            $admissionYears = Admissions::distinctAdmissionYears();
 
             $subjects = Subject::orderBy('name')->get();
         }
@@ -112,14 +115,11 @@ class AttendanceReportController extends Controller
     public function wholeYearForm()
     {
         $user = auth()->user();
-        if (!$user->is_super_admin && !$user->hasRole('admin') && !$user->hasRole('principal') && !$user->hasRole('hssc_admin')) {
+        if (!$user->isAdministrativeStaff()) {
             abort(403, 'Unauthorized access to admin attendance reports.');
         }
 
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
 
         return view('attendance.reports.whole_year_form', compact('admissionYears'));
     }
@@ -130,7 +130,7 @@ class AttendanceReportController extends Controller
     public function generateWholeYearReport(Request $request)
     {
         $user = auth()->user();
-        if (!$user->is_super_admin && !$user->hasRole('admin') && !$user->hasRole('principal') && !$user->hasRole('hssc_admin')) {
+        if (!$user->isAdministrativeStaff()) {
             abort(403, 'Unauthorized access to admin attendance reports.');
         }
 
@@ -247,7 +247,7 @@ class AttendanceReportController extends Controller
     public function teacherStatus(Request $request)
     {
         $user = auth()->user();
-        if (!$user->is_super_admin && !$user->hasRole('admin') && !$user->hasRole('principal') && !$user->hasRole('hssc_admin')) {
+        if (!$user->isAdministrativeStaff()) {
             abort(403, 'Unauthorized access to teacher attendance status.');
         }
 
@@ -467,44 +467,7 @@ class AttendanceReportController extends Controller
      */
     public function checkIfSundayOrHoliday(string $dateString): array
     {
-        $carbonDate = \Carbon\Carbon::parse($dateString);
-
-        // 1. Sunday check
-        if ($carbonDate->isSunday()) {
-            return [true, "Sunday (Weekly Off Day)"];
-        }
-
-        // 2. Public Holidays table check
-        $publicHoliday = \App\Models\PublicHoliday::whereDate('date', $dateString)->where('is_active', true)->first();
-        if ($publicHoliday) {
-            return [true, "Public Holiday: {$publicHoliday->title}"];
-        }
-
-        // 3. Announcements table check (is_holiday = true or title/body contains holiday)
-        $holidayAnnouncement = \App\Models\Announcement::where(function($q) use ($dateString) {
-            $q->where(function($sub) use ($dateString) {
-                $sub->where('is_holiday', true)
-                    ->whereDate('holiday_date', $dateString);
-            })->orWhere(function($sub) use ($dateString) {
-                $sub->where(function($kw) {
-                    $kw->where('title', 'LIKE', '%holiday%')
-                       ->orWhere('body', 'LIKE', '%holiday%')
-                       ->orWhere('title', 'LIKE', '%vacation%')
-                       ->orWhere('title', 'LIKE', '%off day%');
-                })
-                ->where(function($dt) use ($dateString) {
-                    $dt->whereDate('holiday_date', $dateString)
-                       ->orWhereDate('scheduled_at', $dateString)
-                       ->orWhereDate('created_at', $dateString);
-                });
-            });
-        })->first();
-
-        if ($holidayAnnouncement) {
-            return [true, "Announced Holiday: {$holidayAnnouncement->title}"];
-        }
-
-        return [false, null];
+        return $this->academicCalendarService->checkIfSundayOrHoliday($dateString);
     }
 
     /**
@@ -513,7 +476,7 @@ class AttendanceReportController extends Controller
     public function sendReminders(Request $request)
     {
         $user = auth()->user();
-        if (!$user->is_super_admin && !$user->hasRole('admin') && !$user->hasRole('principal') && !$user->hasRole('hssc_admin')) {
+        if (!$user->isAdministrativeStaff()) {
             abort(403, 'Unauthorized access to send reminders.');
         }
 
@@ -570,7 +533,7 @@ class AttendanceReportController extends Controller
     public function teacherWorkload(Request $request)
     {
         $user = auth()->user();
-        if (!$user->is_super_admin && !$user->hasRole('admin') && !$user->hasRole('principal') && !$user->hasRole('hssc_admin')) {
+        if (!$user->isAdministrativeStaff()) {
             abort(403, 'Unauthorized access to teacher workload report.');
         }
 

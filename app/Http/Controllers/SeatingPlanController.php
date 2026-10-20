@@ -12,8 +12,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+use App\Services\SeatingPlanService;
+
 class SeatingPlanController extends Controller
 {
+    public function __construct(
+        protected SeatingPlanService $seatingPlanService
+    ) {}
+
     public function index()
     {
         $plans = SeatingPlan::orderByDesc('test_date')->get();
@@ -56,131 +62,38 @@ class SeatingPlanController extends Controller
             return back()->withErrors(['test_date' => 'Seating plan for this date already exists.']);
         }
 
-        // 1. Get Tests for this date
-        $tests = Datesheet::whereDate('test_date', $date)->get();
+        $candidates = $this->seatingPlanService->getHsscCandidatesForDate($date);
 
-        if ($tests->isEmpty()) {
-            return back()->withErrors(['test_date' => 'No tests scheduled for this date.']);
+        if ($candidates->isEmpty()) {
+            return back()->withErrors(['test_date' => 'No students found for the scheduled tests on this date.']);
         }
 
-        // 2. Get Students
-        // We need to gather all students who have exams on this day.
-        // We'll reuse the logic from DatesheetController to find students for a subject/batch.
-        // Since I can't easily call that private method, I'll replicate the query logic here.
-        
-        $studentList = collect(); // Collection of ['student_id', 'subject_id', 'admission_year']
-
-        foreach ($tests as $test) {
-            $subjectId = $test->subject_id;
-            $year = $test->admission_year;
-            $subject = $test->subject;
-
-            // Get Student IDs and Staff IDs
-            $query = Student::join('admissions', 'students.id', '=', 'admissions.student_id')
-                ->where('admissions.admission_year', $year)
-                ->whereIn('admissions.status', ['Admitted', 'Active'])
-                ->leftJoin('student_teacher_subjects', function($join) use ($subjectId) {
-                    $join->on('students.id', '=', 'student_teacher_subjects.student_id')
-                         ->where('student_teacher_subjects.subject_id', '=', $subjectId)
-                         ->whereNull('student_teacher_subjects.deleted_at')
-                         ->on('student_teacher_subjects.class_level', '=', 'admissions.current_class');
-                });
-
-            if ($subject->type === 'Compulsory') {
-                $query->whereHas('compulsorySubjects', function($q) use ($subjectId) {
-                    $q->where('subject_id', $subjectId);
-                });
-            } else {
-                $query->whereHas('electives', function($q) use ($subjectId) {
-                    $q->where('subject_id', $subjectId);
-                });
-            }
-
-            $studentsData = $query->select('students.id', 'student_teacher_subjects.staff_id')->get();
-
-            foreach ($studentsData as $data) {
-                // Avoid duplicates if student has 2 exams (rare but possible)
-                if (!$studentList->contains('student_id', $data->id)) {
-                    $studentList->push([
-                        'student_id' => $data->id,
-                        'subject_id' => $subjectId,
-                        'admission_year' => $year,
-                        'staff_id' => $data->staff_id,
-                    ]);
-                }
-            }
-        }
-
-
-        if ($studentList->isEmpty()) {
-            return back()->withErrors(['test_date' => 'No students found for the scheduled tests.']);
-        }
-
-        // Sort students: Year ASC, Subject ASC, Teacher ASC, Student ID ASC
-        $studentList = $studentList->sort(function ($a, $b) {
-            // 1. Admission Year (Earliest First)
-            if ($a['admission_year'] !== $b['admission_year']) {
-                return $a['admission_year'] <=> $b['admission_year'];
-            }
-
-            // 2. Subject
-            if ($a['subject_id'] !== $b['subject_id']) {
-                return $a['subject_id'] <=> $b['subject_id'];
-            }
-
-            // 3. Teacher
-            if ($a['staff_id'] !== $b['staff_id']) {
-                // Put students with no teacher at the end
-                if ($a['staff_id'] === null) return 1;
-                if ($b['staff_id'] === null) return -1;
-                return $a['staff_id'] <=> $b['staff_id'];
-            }
-
-            // 4. Student ID (Unique seat number)
-            return $a['student_id'] <=> $b['student_id'];
-        });
-
-        // 3. Get Rooms
         $rooms = Room::where('is_active', true)->forExams()->orderBy('name')->get();
-        
         if ($rooms->isEmpty()) {
             return back()->withErrors(['error' => 'No active rooms available.']);
         }
 
-        // 4. Distribute
-        DB::transaction(function () use ($date, $studentList, $rooms) {
+        DB::transaction(function () use ($date, $candidates, $rooms) {
             $plan = SeatingPlan::create([
                 'test_date' => $date,
                 'created_by' => Auth::id(),
                 'updated_by' => Auth::id(),
             ]);
 
-            $studentIndex = 0;
-            $totalStudents = $studentList->count();
-            $studentsArray = $studentList->values()->all();
-
-            foreach ($rooms as $room) {
-                if ($studentIndex >= $totalStudents) break;
-
-                $capacity = $room->capacity;
-                $seatedCount = 0;
-
-                while ($seatedCount < $capacity && $studentIndex < $totalStudents) {
-                    $studentData = $studentsArray[$studentIndex];
-                    
+            $this->seatingPlanService->allocateSeats(
+                $candidates,
+                $rooms,
+                function ($studentData, $room, $seatNo) use ($plan) {
                     SeatingPlanDetail::create([
                         'seating_plan_id' => $plan->id,
                         'room_id' => $room->id,
                         'student_id' => $studentData['student_id'],
                         'subject_id' => $studentData['subject_id'],
-                        'seat_no' => $seatedCount + 1,
+                        'seat_no' => $seatNo,
                         'admission_year' => $studentData['admission_year'],
                     ]);
-
-                    $studentIndex++;
-                    $seatedCount++;
                 }
-            }
+            );
         });
 
         return redirect()->route('seating-plans.index')->with('success', 'Seating plan generated successfully.');
