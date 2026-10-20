@@ -43,6 +43,28 @@ class FileUploadService
     }
 
     /**
+     * Upload a file to a specific storage disk (e.g. 'public') and optionally delete old file.
+     *
+     * @param UploadedFile $file The uploaded file instance
+     * @param string $directory Target subfolder in storage disk (e.g., 'application_pictures')
+     * @param string $disk The storage disk (default: 'public')
+     * @param string|null $oldRelativePath Path to old file to delete if replacing
+     * @return string The relative path of the saved file
+     */
+    public function uploadToDisk(
+        UploadedFile $file,
+        string $directory = 'uploads',
+        string $disk = 'public',
+        ?string $oldRelativePath = null
+    ): string {
+        if (!empty($oldRelativePath)) {
+            $this->delete($oldRelativePath);
+        }
+
+        return $file->store($directory, $disk);
+    }
+
+    /**
      * Delete a file safely from public path or storage.
      *
      * @param string|null $relativePath Relative path to file

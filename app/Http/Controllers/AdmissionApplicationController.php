@@ -20,6 +20,9 @@ use App\Models\Father;
 use App\Models\Contact;
 use App\Models\StudentAttribute;
 use App\Services\MeritListService;
+use App\Services\FileUploadService;
+use App\Services\FeeCalculationService;
+use App\Actions\Admission\AdmitHeApplicantAction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +30,13 @@ use Illuminate\Support\Facades\Storage;
 
 class AdmissionApplicationController extends Controller
 {
+    public function __construct(
+        protected FileUploadService $fileUploadService,
+        protected FeeCalculationService $feeCalculationService,
+        protected MeritListService $meritListService,
+        protected AdmitHeApplicantAction $admitHeApplicantAction
+    ) {}
+
     /**
      * List all applications with filters
      */
@@ -188,7 +198,11 @@ class AdmissionApplicationController extends Controller
         try {
             $picturePath = null;
             if ($request->hasFile('picture')) {
-                $picturePath = $request->file('picture')->store('application_pictures', 'public');
+                $picturePath = $this->fileUploadService->uploadToDisk(
+                    $request->file('picture'),
+                    'application_pictures',
+                    'public'
+                );
             }
 
             $application = AdmissionApplication::create(array_merge($validated, [
@@ -276,8 +290,7 @@ class AdmissionApplicationController extends Controller
         }
 
         try {
-            $feeService = new \App\Services\FeeCalculationService();
-            $voucher = $feeService->generateVoucherForApplication($application);
+            $voucher = $this->feeCalculationService->generateVoucherForApplication($application);
 
             $application->update([
                 'fee_voucher_number' => $voucher->voucher_number,
@@ -304,8 +317,7 @@ class AdmissionApplicationController extends Controller
             return redirect()->route('admission-applications.show', $application)->with('error', 'Voucher already exists.');
         }
 
-        $feeService = new \App\Services\FeeCalculationService();
-        $items = $feeService->calculateVoucherItems($application);
+        $items = $this->feeCalculationService->calculateVoucherItems($application);
 
         return view('admission-applications.voucher-preview', compact('application', 'items'));
     }
@@ -330,7 +342,6 @@ class AdmissionApplicationController extends Controller
         ]);
 
         try {
-            $feeService = new \App\Services\FeeCalculationService();
             $items = collect($request->input('items'))->map(function($item) {
                 return [
                     'name' => $item['name'],
@@ -340,7 +351,7 @@ class AdmissionApplicationController extends Controller
                 ];
             });
 
-            $voucher = $feeService->createVoucher($application, $items);
+            $voucher = $this->feeCalculationService->createVoucher($application, $items);
 
             $application->update([
                 'fee_voucher_number' => $voucher->voucher_number,
@@ -414,8 +425,7 @@ class AdmissionApplicationController extends Controller
         $rollRanges = $request->input('roll_ranges', MeritListService::DEFAULT_ROLL_RANGES);
 
         if ($selectedYear) {
-            $service = new MeritListService();
-            $preview = $service->preview((int) $selectedYear, $rollRanges, $program);
+            $preview = $this->meritListService->preview((int) $selectedYear, $rollRanges, $program);
         }
 
         $defaultRanges = MeritListService::DEFAULT_ROLL_RANGES;
@@ -438,8 +448,7 @@ class AdmissionApplicationController extends Controller
         ]);
 
         try {
-            $service = new MeritListService();
-            $result = $service->generate(
+            $result = $this->meritListService->generate(
                 (int) $request->admission_year,
                 $request->roll_ranges,
                 $request->input('program_type', 'Inter')
@@ -468,8 +477,7 @@ class AdmissionApplicationController extends Controller
         }
 
         try {
-            $service = new MeritListService();
-            $result = $service->admitLateApplicant($application);
+            $result = $this->meritListService->admitLateApplicant($application);
 
             return back()->with('success', 
                 "Student admitted with Roll Number: {$result['roll_number']} in {$result['group']} group.");
@@ -498,128 +506,16 @@ class AdmissionApplicationController extends Controller
         }
 
         try {
-            return DB::transaction(function () use ($application) {
-                // 1. Create or find student
-                $student = Student::updateOrCreate(
-                    ['cnic' => $application->cnic ?? 'APP-' . $application->id],
-                    [
-                        'first_name' => $application->first_name,
-                        'last_name' => $application->last_name,
-                        'date_of_birth' => $application->date_of_birth,
-                        'gender' => $application->gender,
-                        'religion' => $application->religion,
-                        'nationality' => $application->nationality,
-                        'cnic' => $application->cnic,
-                        'picture' => $application->picture,
-                        'updated_by' => Auth::id(),
-                    ]
-                );
-                if ($student->wasRecentlyCreated) {
-                    $student->created_by = Auth::id();
-                    $student->save();
-                }
+            $heAdmission = $this->admitHeApplicantAction->execute($application);
 
-                // 2. Student Attributes
-                StudentAttribute::updateOrCreate(
-                    ['student_id' => $student->id],
-                    [
-                        'blood_group_id' => $application->blood_group_id,
-                        'quota_id' => $application->quota_id,
-                        'student_cnic' => $application->cnic,
-                        'updated_by' => Auth::id(),
-                    ]
-                );
-
-                // 3. Father
-                Father::updateOrCreate(
-                    ['student_id' => $student->id],
-                    [
-                        'name' => $application->father_name,
-                        'cnic' => $application->father_cnic,
-                        'contact' => $application->father_contact,
-                        'occupation' => $application->father_occupation,
-                        'annual_income' => $application->father_annual_income,
-                        'updated_by' => Auth::id(),
-                    ]
-                );
-
-                // 4. Contact
-                Contact::updateOrCreate(
-                    ['student_id' => $student->id],
-                    [
-                        'student_contact' => $application->student_contact,
-                        'whatsapp_no' => $application->whatsapp_no,
-                        'email' => $application->email,
-                        'address' => $application->address,
-                        'picture' => $application->picture,
-                        'updated_by' => Auth::id(),
-                    ]
-                );
-
-                // 5. SSC Record
-                SscRecord::updateOrCreate(
-                    ['student_id' => $student->id],
-                    [
-                        'bise_id' => $application->bise_id,
-                        'roll_no' => $application->ssc_roll_no,
-                        'reg_no' => $application->ssc_reg_no,
-                        'school_name' => $application->ssc_school_name,
-                        'total_mark' => $application->ssc_total_marks,
-                        'obtained_mark' => $application->ssc_obtained_marks,
-                        'passing_year' => $application->ssc_passing_year,
-                        'passing_session' => $application->ssc_passing_session,
-                        'ssc_group' => $application->ssc_group,
-                        'updated_by' => Auth::id(),
-                    ]
-                );
-
-                // 6. HSSC Record
-                HsscRecord::updateOrCreate(
-                    ['student_id' => $student->id],
-                    [
-                        'bise_id' => $application->hssc_bise_id,
-                        'roll_no' => $application->hssc_roll_no,
-                        'reg_no' => $application->hssc_reg_no,
-                        'college_name' => $application->hssc_college_name,
-                        'total_mark' => $application->hssc_total_marks,
-                        'obtained_mark' => $application->hssc_obtained_marks,
-                        'passing_year' => $application->hssc_passing_year,
-                        'passing_session' => $application->hssc_passing_session,
-                        'hssc_group' => $application->hssc_group,
-                        'updated_by' => Auth::id(),
-                    ]
-                );
-
-                // 7. HE Admission (Semester 1)
-                $heAdmission = HeAdmission::create([
-                    'student_id' => $student->id,
-                    'program_id' => $application->program_id,
-                    'roll_no' => null,
-                    'admission_year' => $application->admission_year,
-                    'current_semester' => 1,
-                    'status' => 'Admitted',
-                    'created_by' => Auth::id(),
-                    'updated_by' => Auth::id(),
-                ]);
-
-                // 8. Mark application as admitted
-                $application->update([
-                    'status' => 'admitted',
-                    'assigned_roll_no' => null,
-                ]);
-
-                return redirect()->route('admissions.show', $heAdmission)
-                    ->with('success', 'Student admitted successfully into ' . $heAdmission->program->name . ' — Semester 1.');
-            });
+            return redirect()->route('admissions.show', $heAdmission)
+                ->with('success', 'Student admitted successfully into ' . $heAdmission->program->name . ' — Semester 1.');
         } catch (\Exception $e) {
             \Log::error('HE applicant admission failed: ' . $e->getMessage());
             return back()->with('error', 'Admission failed: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Show form to edit an application
-     */
     public function edit(AdmissionApplication $application)
     {
         if ($application->status === 'admitted') {
@@ -720,11 +616,12 @@ class AdmissionApplicationController extends Controller
 
         try {
             if ($request->hasFile('picture')) {
-                // Delete old picture if exists
-                if ($application->picture) {
-                    Storage::disk('public')->delete($application->picture);
-                }
-                $validated['picture'] = $request->file('picture')->store('application_pictures', 'public');
+                $validated['picture'] = $this->fileUploadService->uploadToDisk(
+                    $request->file('picture'),
+                    'application_pictures',
+                    'public',
+                    $application->picture
+                );
             }
 
             $application->update($validated);

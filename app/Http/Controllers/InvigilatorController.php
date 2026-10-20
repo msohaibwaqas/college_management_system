@@ -283,52 +283,13 @@ class InvigilatorController extends Controller
     public function dutyRoster(Request $request)
     {
         $date = $request->get('date');
-        
-        // Get all dates from assignments
-        $examDates = InvigilatorAssignment::select('exam_date')
-            ->distinct()
-            ->orderBy('exam_date')
-            ->get()
-            ->map(function($a) {
-                return (object)['exam_date' => \Carbon\Carbon::parse($a->exam_date)];
-            });
-            
-        $assignments = collect();
+        $examDates = $this->invigilationService->getRosterDates('HSSC');
+        $assignments = $date ? $this->invigilationService->getDutyRoster($date, 'HSSC') : collect();
         $institute = \App\Models\InstituteSetting::first();
-        
-        if ($date) {
-            $assignments = InvigilatorAssignment::where('exam_date', $date)
-                ->with(['room', 'staff.designationModel', 'seatingPlan'])
-                ->get()
-                ->groupBy(function($a) {
-                    return "hssc_{$a->seating_plan_id}_{$a->room_id}";
-                })
-                ->map(function($group) {
-                    $first = $group->first();
-                    $roomName = $first->room->name;
 
-                    return [
-                        'room_name' => $roomName,
-                        'staff' => $group->pluck('staff')->sortBy(function($staff) {
-                            $designationOrder = [
-                                'professor' => 1,
-                                'associate professor' => 2,
-                                'assistant professor' => 3,
-                                'lecturer' => 4,
-                            ];
-                            $desig = strtolower(trim($staff->designationModel->name ?? $staff->designation ?? ''));
-                            return $designationOrder[$desig] ?? 999;
-                        })
-                    ];
-                })->sortBy('room_name');
-        }
-        
         return view('invigilators.duty_roster', compact('assignments', 'examDates', 'date', 'institute'));
     }
 
-    /**
-     * Show form to configure auto-assignment
-     */
     public function create()
     {
         $designations = Designation::all();
@@ -364,292 +325,17 @@ class InvigilatorController extends Controller
             'invigilators_per_room' => 'required|integer|min:1|max:4',
         ]);
 
-        // Check for concurrent assignment operations
-        $lockTimeout = 300; // 5 minutes
-        $locked = DB::table('seating_plans')
-            ->where('assignment_in_progress', true)
-            ->where('assignment_locked_at', '>', now()->subSeconds($lockTimeout))
-            ->exists();
-
-        if ($locked) {
-            return back()->withErrors(['error' => 'Another assignment operation is in progress. Please wait and try again.']);
-        }
-
-        DB::beginTransaction();
         try {
             $startDate = Carbon::parse($request->start_date);
             $endDate = Carbon::parse($request->end_date);
             $exemptedStaffIds = $request->exempted_staff ?? [];
-            $invigilatorsPerRoom = $request->invigilators_per_room;
+            $invigilatorsPerRoom = (int) $request->invigilators_per_room;
 
-            // Set lock on all seating plans in date range
-            DB::table('seating_plans')
-                ->whereBetween('test_date', [$startDate, $endDate])
-                ->update([
-                    'assignment_in_progress' => true,
-                    'assignment_locked_at' => now()
-                ]);
-
-            // Get all HSSC seating plans in date range
-            $hsscPlans = SeatingPlan::whereBetween('test_date', [$startDate, $endDate])->get();
-            
-            if ($hsscPlans->isEmpty()) {
-                DB::rollBack();
-                return back()->withErrors(['error' => 'No seating plans found for the selected date range.']);
-            }
-
-            // Data consistency check
-            $plansWithoutRooms = $hsscPlans->filter(function($plan) {
-                return $plan->details()->count() == 0;
-            });
-
-            if ($plansWithoutRooms->isNotEmpty()) {
-                DB::rollBack();
-                return back()->withErrors(['error' => 'Some seating plans have no rooms assigned. Please fix before auto-assignment.']);
-            }
-
-            // Get eligible teachers (teaching category, not exempted)
-            $exemptedFromConductors = ExamConductor::getExemptedStaffIds($startDate, $endDate);
-            $allExempted = array_unique(array_merge($exemptedStaffIds, $exemptedFromConductors));
-            
-            $eligibleTeachers = Staff::teaching()
-                ->active()
-                ->whereNotNull('designation_id')
-                ->whereNotIn('id', $allExempted)
-                ->with('designationModel')
-                ->get();
-
-            if ($eligibleTeachers->isEmpty()) {
-                DB::rollBack();
-                return back()->withErrors(['error' => 'No eligible teachers found for invigilator duty.']);
-            }
-
-            // Check if all designations have duty rules
-            $teachersWithoutRules = $eligibleTeachers->filter(function($teacher) {
-                return $teacher->designation_id === null || InvigilatorDutyRule::getMaxDutyDays($teacher->designation_id) === null;
-            });
-
-            $warnings = [];
-            if ($teachersWithoutRules->isNotEmpty()) {
-                $warnings[] = 'Warning: ' . $teachersWithoutRules->count() . ' teachers have no duty rules set. They will use default limit (999 days).';
-            }
-
-            // Initialize duty tracking
-            $dutyCount = [];
-            $mandatoryAssignments = [];
-
-            foreach ($eligibleTeachers as $teacher) {
-                $dutyCount[$teacher->id] = [
-                    'count' => 0,
-                    'max' => InvigilatorDutyRule::getMaxDutyDays($teacher->designation_id) ?? 999,
-                    'teacher' => $teacher,
-                ];
-            }
-
-
-            // Track daily assignments to prevent double booking: [date => [staff_id => true]]
-            $dailyAssignments = [];
-            $allAssignments = [];
-            $teachersOverLimit = [];
-            $roomsUnderStaffed = [];
-
-            // Step 1: Build a list of all room slots that need filling
-            $roomSlots = [];
-            
-            foreach ($hsscPlans as $plan) {
-                $rooms = $plan->details->groupBy('room_id');
-                $dateKey = $plan->test_date->format('Y-m-d');
-                
-                // Pre-fetch all student-teacher mappings for this plan to avoid N+1 queries
-                $studentIds = $plan->details->pluck('student_id')->unique();
-                $subjectIds = $plan->details->pluck('subject_id')->unique();
-                $teacherMappings = \App\Models\StudentTeacherSubject::whereIn('student_id', $studentIds)
-                    ->whereIn('subject_id', $subjectIds)
-                    ->get()
-                    ->groupBy('student_id');
-
-                foreach ($rooms as $roomId => $details) {
-                    // Identify "preferred" teachers for this room
-                    $teacherCounts = [];
-                    foreach ($details as $detail) {
-                        // Look up teacher in pre-fetched mappings
-                        $mapping = $teacherMappings->get($detail->student_id)?->where('subject_id', $detail->subject_id)?->first();
-                        $teacherId = $mapping?->staff_id;
-                        
-                        if ($teacherId) {
-                            $teacherCounts[$teacherId] = ($teacherCounts[$teacherId] ?? 0) + 1;
-                        }
-                    }
-                    
-                    // Sort teachers by student count (descending)
-                    arsort($teacherCounts);
-                    $preferredTeachers = array_keys($teacherCounts);
-
-                    for ($i = 0; $i < $invigilatorsPerRoom; $i++) {
-                        $roomSlots[] = [
-                            'plan_id' => $plan->id,
-                            'room_id' => $roomId,
-                            'date_key' => $dateKey,
-                            'exam_date' => $plan->test_date,
-                            'priority' => $plan->test_date->timestamp,
-                            'preferred_teachers' => $preferredTeachers,
-                        ];
-                    }
-                }
-            }
-
-            // Step 2: Sort room slots by priority
-            usort($roomSlots, function($a, $b) {
-                return $b['priority'] - $a['priority'];
-            });
-
-            // Step 3: Priority Pass - Assign preferred teachers if available and eligible
-            $remainingSlots = [];
-            foreach ($roomSlots as $slot) {
-                $dateKey = $slot['date_key'];
-                $assigned = false;
-
-                if (!isset($dailyAssignments[$dateKey])) {
-                    $dailyAssignments[$dateKey] = [];
-                }
-
-                foreach ($slot['preferred_teachers'] as $staffId) {
-                    // Check if this preferred teacher is eligible, not assigned today, and under limit
-                    if (isset($dutyCount[$staffId]) && 
-                        !isset($dailyAssignments[$dateKey][$staffId]) && 
-                        $dutyCount[$staffId]['count'] < $dutyCount[$staffId]['max']) {
-                        
-                        $allAssignments[] = [
-                            'room_id' => $slot['room_id'],
-                            'staff_id' => $staffId,
-                            'exam_date' => $slot['exam_date'],
-                            'is_auto_assigned' => true,
-                            'seating_plan_id' => $slot['plan_id'],
-                        ];
-                        $dutyCount[$staffId]['count']++;
-                        $dailyAssignments[$dateKey][$staffId] = true;
-                        $assigned = true;
-                        break;
-                    }
-                }
-
-                if (!$assigned) {
-                    $remainingSlots[] = $slot;
-                }
-            }
-
-            // Step 4: Balance Pass - Fill remaining slots using round-robin
-            foreach ($remainingSlots as $slot) {
-                $dateKey = $slot['date_key'];
-                
-                // Find the best available teacher for this slot
-                $bestTeacher = null;
-                $lowestDutyCount = PHP_INT_MAX;
-
-                foreach ($dutyCount as $staffId => $data) {
-                    if (!isset($dailyAssignments[$dateKey][$staffId]) && 
-                        $data['count'] < $data['max']) {
-                        
-                        if ($data['count'] < $lowestDutyCount) {
-                            $bestTeacher = $staffId;
-                            $lowestDutyCount = $data['count'];
-                        }
-                    }
-                }
-
-                if ($bestTeacher !== null) {
-                    $allAssignments[] = [
-                        'room_id' => $slot['room_id'],
-                        'staff_id' => $bestTeacher,
-                        'exam_date' => $slot['exam_date'],
-                        'is_auto_assigned' => true,
-                        'seating_plan_id' => $slot['plan_id'],
-                    ];
-                    $dutyCount[$bestTeacher]['count']++;
-                    $dailyAssignments[$dateKey][$bestTeacher] = true;
-                }
-            }
-
-            // Step 4: Identify under-staffed rooms
-                // This logic is mostly for reporting/warnings, can be simplified for now or kept as is if tweaked
-                // For simplicity in this large refactor, I'll focus on getting the data saved correctly.
-                // We'll skip detailed shortage reporting for HE in the initial pass if it gets too complex.
-
-            // Check for teachers exceeding limits
-            foreach ($dutyCount as $staffId => $data) {
-                if ($data['count'] > $data['max']) {
-                    $teachersOverLimit[] = [
-                        'name' => $data['teacher']->first_name . ' ' . $data['teacher']->last_name,
-                        'assigned' => $data['count'],
-                        'limit' => $data['max'],
-                        'excess' => $data['count'] - $data['max']
-                    ];
-                }
-            }
-
-            // Cleanup orphaned records before inserting new ones
-            $this->cleanupOrphanedRecords($startDate, $endDate);
-
-            // Delete existing auto-assigned records in this date range
-            InvigilatorAssignment::whereBetween('exam_date', [$startDate, $endDate])
-                ->where('is_auto_assigned', true)
-                ->delete();
-
-            // Insert all assignments
-            if (!empty($allAssignments)) {
-                InvigilatorAssignment::insert($allAssignments);
-            }
-
-            // Release lock
-            DB::table('seating_plans')
-                ->whereBetween('test_date', [$startDate, $endDate])
-                ->update([
-                    'assignment_in_progress' => false,
-                    'assignment_locked_at' => null
-                ]);
-
-            DB::commit();
-
-            // Calculate daily stats for reporting
-            $dailyStats = [];
-            foreach ($hsscPlans as $plan) {
-                $dateKey = $plan->test_date->format('Y-m-d');
-                $rooms = $plan->details->groupBy('room_id');
-                $totalRooms = $rooms->count();
-                $neededInvigilators = $totalRooms * $invigilatorsPerRoom;
-                
-                // Count available teachers for this day
-                $availableTeachersCount = collect($dutyCount)->filter(function ($data, $staffId) use ($dailyAssignments, $dateKey) {
-                    return !isset($dailyAssignments[$dateKey][$staffId]) && 
-                           $data['count'] < $data['max'];
-                })->count();
-
-                // Count teachers who are free today but excluded by max limit
-                $excludedByLimitCount = collect($dutyCount)->filter(function ($data, $staffId) use ($dailyAssignments, $dateKey) {
-                    return !isset($dailyAssignments[$dateKey][$staffId]) && 
-                           $data['count'] >= $data['max'];
-                })->count();
-
-                $dailyStats[$dateKey] = [
-                    'date' => $plan->test_date->format('d M Y'),
-                    'total_rooms' => $totalRooms,
-                    'needed_invigilators' => $neededInvigilators,
-                    'assigned_invigilators' => isset($dailyAssignments[$dateKey]) ? count($dailyAssignments[$dateKey]) : 0,
-                    'available_teachers' => $availableTeachersCount,
-                    'excluded_by_limit' => $excludedByLimitCount,
-                    'shortage' => max(0, $neededInvigilators - (isset($dailyAssignments[$dateKey]) ? count($dailyAssignments[$dateKey]) : 0))
-                ];
-            }
-
-            // Generate detailed report
-            $report = $this->generateAssignmentReport(
-                $allAssignments,
-                $mandatoryAssignments,
-                $dutyCount,
-                $roomsUnderStaffed,
-                $teachersOverLimit,
-                $warnings,
-                $dailyStats
+            $report = $this->invigilationService->autoAssignHssc(
+                $startDate,
+                $endDate,
+                $invigilatorsPerRoom,
+                $exemptedStaffIds
             );
 
             return redirect()->route('invigilators.index')
@@ -657,22 +343,10 @@ class InvigilatorController extends Controller
                 ->with('report', $report);
 
         } catch (\Exception $e) {
-            // Release lock on error
-            DB::table('seating_plans')
-                ->whereBetween('test_date', [$startDate ?? now(), $endDate ?? now()])
-                ->update([
-                    'assignment_in_progress' => false,
-                    'assignment_locked_at' => null
-                ]);
-
-            DB::rollBack();
-            return back()->withErrors(['error' => 'Error during auto-assignment: ' . $e->getMessage()]);
+            return back()->withErrors(['error' => $e->getMessage()]);
         }
     }
 
-    /**
-     * Update an assignment (manual adjustment)
-     */
     public function update(Request $request, InvigilatorAssignment $assignment)
     {
         $request->validate([
@@ -784,64 +458,4 @@ class InvigilatorController extends Controller
         return back()->with('success', 'Exemption removed successfully.');
     }
 
-    /**
-     * Cleanup orphaned invigilator assignment records
-     */
-    private function cleanupOrphanedRecords($startDate, $endDate)
-    {
-        // Remove assignments for deleted staff (staff table uses soft deletes)
-        $deletedStaffIds = DB::table('staff')->whereNotNull('deleted_at')->pluck('id');
-        if ($deletedStaffIds->isNotEmpty()) {
-            InvigilatorAssignment::whereIn('staff_id', $deletedStaffIds)->delete();
-        }
-
-        // Remove assignments for dates with no seating plans (orphaned records)
-        $validPlanIds = SeatingPlan::whereBetween('test_date', [$startDate, $endDate])->pluck('id');
-        if ($validPlanIds->isNotEmpty()) {
-            InvigilatorAssignment::whereBetween('exam_date', [$startDate, $endDate])
-                ->whereNotIn('seating_plan_id', $validPlanIds)
-                ->delete();
-        }
-    }
-
-    /**
-     * Generate detailed assignment report
-     */
-    private function generateAssignmentReport($allAssignments, $mandatoryAssignments, $dutyCount, $roomsUnderStaffed, $teachersOverLimit, $warnings, $dailyStats = [])
-    {
-        $report = [
-            'total_assignments' => count($allAssignments),
-            'mandatory_assignments' => count($mandatoryAssignments),
-            'optional_assignments' => count($allAssignments) - count($mandatoryAssignments),
-            'warnings' => $warnings,
-            'rooms_understaffed' => $roomsUnderStaffed,
-            'teachers_over_limit' => $teachersOverLimit,
-            'daily_stats' => $dailyStats,
-            'duty_distribution' => []
-        ];
-
-        // Calculate duty distribution by designation
-        $dutyByDesignation = [];
-        foreach ($dutyCount as $staffId => $data) {
-            $designation = $data['teacher']->designationModel->name ?? 'Unknown';
-            if (!isset($dutyByDesignation[$designation])) {
-                $dutyByDesignation[$designation] = [
-                    'total_teachers' => 0,
-                    'total_duties' => 0,
-                    'avg_duties' => 0,
-                    'max_limit' => $data['max']
-                ];
-            }
-            $dutyByDesignation[$designation]['total_teachers']++;
-            $dutyByDesignation[$designation]['total_duties'] += $data['count'];
-        }
-
-        foreach ($dutyByDesignation as $designation => &$stats) {
-            $stats['avg_duties'] = round($stats['total_duties'] / $stats['total_teachers'], 2);
-        }
-
-        $report['duty_distribution'] = $dutyByDesignation;
-
-        return $report;
-    }
 }

@@ -191,43 +191,13 @@ class HeInvigilatorController extends Controller
     public function dutyRoster(Request $request)
     {
         $date = $request->get('date');
-        $examDates = InvigilatorAssignment::whereNotNull('he_seating_plan_id')
-            ->select('exam_date')->distinct()->orderBy('exam_date')->get()
-            ->map(function($a) {
-                return (object)['exam_date' => \Carbon\Carbon::parse($a->exam_date)];
-            });
-            
-        $assignments = collect();
+        $examDates = $this->invigilationService->getRosterDates('HE');
+        $assignments = $date ? $this->invigilationService->getDutyRoster($date, 'HE') : collect();
         $institute = \App\Models\InstituteSetting::first();
-        
-        if ($date) {
-            $assignments = InvigilatorAssignment::where('exam_date', $date)
-                ->whereNotNull('he_seating_plan_id')
-                ->with(['room', 'staff.designationModel', 'heSeatingPlan.datesheet.bsSubject'])
-                ->get()
-                ->groupBy(function($a) {
-                    return "he_{$a->he_seating_plan_id}_{$a->room_id}";
-                })
-                ->map(function($group) {
-                    $first = $group->first();
-                    $subjectName = $first->heSeatingPlan->datesheet->bsSubject->name ?? 'HE';
-                    return [
-                        'room_name' => "{$first->room->name} ({$subjectName})",
-                        'staff' => $group->pluck('staff')->sortBy(function($staff) {
-                            $order = ['professor' => 1, 'associate professor' => 2, 'assistant professor' => 3, 'lecturer' => 4];
-                            $desig = strtolower(trim($staff->designationModel->name ?? $staff->designation ?? ''));
-                            return $order[$desig] ?? 999;
-                        })
-                    ];
-                })->sortBy('room_name');
-        }
-        
+
         return view('he.invigilators.duty_roster', compact('assignments', 'examDates', 'date', 'institute'));
     }
 
-    /**
-     * HE Configuration for auto-assignment
-     */
     public function create()
     {
         $designations = Designation::all();
@@ -253,88 +223,16 @@ class HeInvigilatorController extends Controller
             'invigilators_per_room' => 'required|integer|min:1|max:4',
         ]);
 
-        DB::beginTransaction();
         try {
             $startDate = Carbon::parse($request->start_date);
             $endDate = Carbon::parse($request->end_date);
-            $perRoom = $request->invigilators_per_room;
+            $perRoom = (int) $request->invigilators_per_room;
 
-            $hePlans = HeSeatingPlan::whereHas('datesheet', fn($q) => $q->whereBetween('exam_date', [$startDate, $endDate]))
-                ->with('datesheet')->get();
+            $this->invigilationService->autoAssignHe($startDate, $endDate, $perRoom);
 
-            if ($hePlans->isEmpty()) {
-                DB::rollBack();
-                return back()->withErrors(['error' => 'No HE seating plans found.']);
-            }
-
-            $eligibleTeachers = Staff::teaching()->active()->whereNotNull('designation_id')->with('designationModel')->get();
-            $dutyCount = [];
-            foreach ($eligibleTeachers as $teacher) {
-                $dutyCount[$teacher->id] = [
-                    'count' => InvigilatorAssignment::where('staff_id', $teacher->id)->count(),
-                    'max' => InvigilatorDutyRule::getMaxDutyDays($teacher->designation_id) ?? 15,
-                    'teacher' => $teacher
-                ];
-            }
-
-            $roomSlots = [];
-            foreach ($hePlans as $plan) {
-                $rooms = $plan->details->groupBy('room_id');
-                $dateKey = $plan->datesheet->exam_date->format('Y-m-d');
-                foreach ($rooms as $roomId => $details) {
-                    for ($i = 0; $i < $perRoom; $i++) {
-                        $roomSlots[] = [
-                            'plan_id' => $plan->id,
-                            'room_id' => $roomId,
-                            'date_key' => $dateKey,
-                            'exam_date' => $plan->datesheet->exam_date,
-                        ];
-                    }
-                }
-            }
-
-            $allAssignments = [];
-            $dailyAssignments = [];
-
-            foreach ($roomSlots as $slot) {
-                $dateKey = $slot['date_key'];
-                $bestTeacher = null;
-                $lowestCount = PHP_INT_MAX;
-
-                foreach ($dutyCount as $id => $data) {
-                    if (!isset($dailyAssignments[$dateKey][$id]) && $data['count'] < $data['max']) {
-                        if ($data['count'] < $lowestCount) {
-                            $bestTeacher = $id;
-                            $lowestCount = $data['count'];
-                        }
-                    }
-                }
-
-                if ($bestTeacher) {
-                    $allAssignments[] = [
-                        'room_id' => $slot['room_id'],
-                        'staff_id' => $bestTeacher,
-                        'exam_date' => $slot['exam_date'],
-                        'is_auto_assigned' => true,
-                        'he_seating_plan_id' => $slot['plan_id'],
-                    ];
-                    $dutyCount[$bestTeacher]['count']++;
-                    $dailyAssignments[$dateKey][$bestTeacher] = true;
-                }
-            }
-
-            InvigilatorAssignment::whereBetween('exam_date', [$startDate, $endDate])
-                ->where('is_auto_assigned', true)->whereNotNull('he_seating_plan_id')->delete();
-
-            if (!empty($allAssignments)) {
-                InvigilatorAssignment::insert($allAssignments);
-            }
-
-            DB::commit();
             return redirect()->route('he.invigilators.index')->with('success', 'HE Invigilators auto-assigned.');
 
         } catch (\Exception $e) {
-            DB::rollBack();
             return back()->withErrors(['error' => $e->getMessage()]);
         }
     }
