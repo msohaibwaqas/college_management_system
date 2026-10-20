@@ -300,12 +300,18 @@
                                 </a>
                             </li>
                         @endif
-                        @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin']))
+                        @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'super_admin']))
                             <li>
                                 <a href="{{ route('struck-off.index') }}"
                                    class="{{ request()->routeIs('struck-off.index') ? 'active' : '' }}"
                                    style="color: #ff8080;">
                                     <i class="fas fa-user-slash me-1" style="font-size:0.8em;"></i> Struck-Off Mgmt
+                                </a>
+                            </li>
+                            <li>
+                                <a href="{{ route('struck-off.teacher') }}"
+                                   class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}">
+                                    <i class="fas fa-exclamation-triangle me-1 text-warning" style="font-size:0.8em;"></i> Struck-Off Eligible
                                 </a>
                             </li>
                         @endif

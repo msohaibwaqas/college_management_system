@@ -40,7 +40,7 @@
             <div class="card border-0 shadow-sm">
                 <div class="card-body text-center py-4">
                     <div class="display-5 fw-bold text-success">{{ $readmissionsThisYear }}</div>
-                    <div class="text-muted small mt-1">Readmissions This Year <span class="text-muted fs-6">(max 2)</span></div>
+                    <div class="text-muted small mt-1">Readmissions This Year <span class="text-muted fs-6">(max {{ $settings->max_readmissions_per_year ?? 2 }})</span></div>
                 </div>
             </div>
         </div>

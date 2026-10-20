@@ -10,86 +10,142 @@ use App\Models\Student;
 use App\Models\Admissions;
 use App\Models\Attendance;
 use App\Models\Subject;
+use App\Models\StruckOffSetting;
+use Carbon\Carbon;
 
 class StruckOffController extends Controller
 {
     // -------------------------------------------------------
-    // TEACHER: view students eligible to be struck off
-    // (those who have > 10 absents in a specific subject taught
-    // by this teacher)
+    // TEACHER & ADMIN: view students eligible to be struck off
     // -------------------------------------------------------
-
     public function teacherPanel(Request $request)
     {
-        $user  = Auth::user();
-        $staff = $user->staff;
+        $user     = Auth::user();
+        $staff    = $user->staff;
+        $settings = StruckOffSetting::getSettings();
 
-        if (!$staff) {
-            return redirect()->route('dashboard')->with('error', 'No staff record linked to your account.');
+        // 1. Parse parameters
+        // Handle composite selector format: subject_id:class:year
+        if ($request->filled('class_subject') && str_contains($request->class_subject, ':')) {
+            $parts = explode(':', $request->class_subject);
+            $subjectId = (int) ($parts[0] ?? 0);
+            $class     = $parts[1] ?? null;
+            $year      = (int) ($parts[2] ?? 0);
+        } else {
+            $subjectId = $request->filled('subject_id') ? (int) $request->query('subject_id') : null;
+            $class     = $request->query('class');
+            $year      = $request->filled('year') ? (int) $request->query('year') : null;
         }
 
-        // Get all subject-class combinations the teacher is assigned to
-        $subjectId = $request->query('subject_id');
-        $year      = $request->query('year');
+        $month     = $request->query('month', $settings->calculation_period === 'monthly' ? now()->format('Y-m') : 'all');
+        $threshold = (int) $request->query('threshold', $settings->absent_threshold);
+        if ($threshold < 1) {
+            $threshold = $settings->absent_threshold;
+        }
 
-        // Subjects/classes this teacher teaches
-        $mySubjects = DB::table('student_teacher_subjects')
+        // 2. Fetch all assigned classes & subjects for this user/staff
+        $subjectsQuery = DB::table('student_teacher_subjects')
             ->join('subjects', 'student_teacher_subjects.subject_id', '=', 'subjects.id')
             ->join('admissions', 'student_teacher_subjects.student_id', '=', 'admissions.student_id')
-            ->where('student_teacher_subjects.staff_id', $staff->id)
-            ->whereIn('admissions.status', ['active', 'admitted'])
+            ->whereIn('admissions.status', ['active', 'admitted', 'Active', 'Admitted'])
+            ->whereNotIn('admissions.status', ['Struck Off', 'struck_off', 'Graduated'])
             ->whereNull('student_teacher_subjects.deleted_at')
-            ->whereNull('admissions.deleted_at')
-            ->select(
+            ->whereNull('admissions.deleted_at');
+
+        if ($staff && !$user->hasRole('admin') && !$user->is_super_admin) {
+            $subjectsQuery->where('student_teacher_subjects.staff_id', $staff->id);
+        }
+
+        $mySubjects = $subjectsQuery->select(
                 'subjects.id as subject_id',
                 'subjects.name as subject_name',
                 'admissions.current_class as current_class',
                 'admissions.admission_year as admission_year',
+                DB::raw('COUNT(DISTINCT student_teacher_subjects.student_id) as student_count')
             )
             ->groupBy('subjects.id', 'subjects.name', 'admissions.current_class', 'admissions.admission_year')
             ->orderByDesc('admissions.admission_year')
+            ->orderBy('admissions.current_class')
+            ->orderBy('subjects.name')
             ->get();
 
+        $availableYears = $mySubjects->pluck('admission_year')->filter()->unique()->values()->sortDesc();
+
+        // If no year selected yet, default to the first available year
+        if (!$year && $availableYears->isNotEmpty()) {
+            $year = (int) $availableYears->first();
+        }
+
+        // If year is selected but subject is not, pick the first subject for that year
+        if ($year && !$subjectId) {
+            $firstSub = $mySubjects->where('admission_year', $year)->first();
+            if ($firstSub) {
+                $subjectId = (int) $firstSub->subject_id;
+                $class     = $firstSub->current_class;
+            }
+        }
+
+        // Available months from attendance records
+        $availableMonths = DB::table('attendances')
+            ->select(DB::raw("DATE_FORMAT(attendance_date, '%Y-%m') as m"))
+            ->distinct()
+            ->orderByDesc('m')
+            ->limit(12)
+            ->pluck('m');
+
+        // 3. Query eligible students
         $eligibleStudents = collect();
 
         if ($subjectId && $year) {
-            // Count absents per student for this specific subject only
-            $eligibleStudents = DB::table('student_teacher_subjects')
+            $attQuery = DB::table('attendances')
+                ->where('subject_id', $subjectId)
+                ->where('status', 'absent');
+
+            if ($month && $month !== 'all') {
+                $attQuery->whereRaw("DATE_FORMAT(attendance_date, '%Y-%m') = ?", [$month]);
+            }
+
+            $absSubQuery = $attQuery->select('student_id', DB::raw('COUNT(*) AS absence_count'))
+                ->groupBy('student_id');
+
+            $eligibleQuery = DB::table('student_teacher_subjects')
                 ->join('students', 'student_teacher_subjects.student_id', '=', 'students.id')
                 ->join('admissions', 'students.id', '=', 'admissions.student_id')
                 ->leftJoin('fathers', 'students.id', '=', 'fathers.student_id')
-                ->join(
-                    // Sub-select: absence count per student in this subject
-                    DB::raw('(
-                        SELECT student_id, COUNT(*) AS absence_count
-                        FROM attendances
-                        WHERE subject_id = ' . (int)$subjectId . '
-                          AND status = \'absent\'
-                        GROUP BY student_id
-                    ) AS abs'),
-                    'students.id', '=', 'abs.student_id'
-                )
-                ->where('student_teacher_subjects.staff_id', $staff->id)
+                ->joinSub($absSubQuery, 'abs', function ($join) {
+                    $join->on('students.id', '=', 'abs.student_id');
+                })
                 ->where('student_teacher_subjects.subject_id', $subjectId)
                 ->where('admissions.admission_year', $year)
-                ->whereIn('admissions.status', ['active', 'admitted'])
+                ->whereIn('admissions.status', ['active', 'admitted', 'Active', 'Admitted'])
                 ->whereNull('student_teacher_subjects.deleted_at')
                 ->whereNull('students.deleted_at')
                 ->whereNull('admissions.deleted_at')
-                ->where('abs.absence_count', '>', 10)
-                ->select(
-                    'students.id as student_id',
-                    'students.first_name',
-                    'students.last_name',
-                    'admissions.id as admission_id',
-                    'admissions.college_roll_no as roll_number',
-                    'admissions.current_class',
-                    'admissions.academic_year',
-                    'fathers.name as father_name',
-                    'abs.absence_count',
-                )
-                ->orderByDesc('abs.absence_count')
-                ->get();
+                ->where('abs.absence_count', '>=', $threshold);
+
+            if ($staff && !$user->hasRole('admin') && !$user->is_super_admin) {
+                $eligibleQuery->where('student_teacher_subjects.staff_id', $staff->id);
+            }
+
+            if ($class) {
+                $eligibleQuery->where('admissions.current_class', $class);
+            }
+
+            $eligibleStudents = $eligibleQuery->select(
+                'students.id as student_id',
+                'students.first_name',
+                'students.last_name',
+                'admissions.id as admission_id',
+                'admissions.college_roll_no as roll_number',
+                'admissions.current_class',
+                'admissions.admission_year',
+                'admissions.academic_year',
+                'fathers.name as father_name',
+                'abs.absence_count'
+            )
+            ->distinct()
+            ->orderByDesc('abs.absence_count')
+            ->get();
 
             // Annotate with already-struck-off flag
             $struckOffStudentIds = StudentStruckOffLog::where('status', 'struck_off')
@@ -104,57 +160,75 @@ class StruckOffController extends Controller
 
         $selectedSubjectId = $subjectId;
         $selectedYear      = $year;
+        $selectedClass     = $class;
+        $selectedMonth     = $month;
+        $selectedThreshold = $threshold;
 
         return view('struck-off.teacher', compact(
-            'mySubjects', 'eligibleStudents', 'selectedSubjectId', 'selectedYear'
+            'mySubjects',
+            'eligibleStudents',
+            'selectedSubjectId',
+            'selectedYear',
+            'selectedClass',
+            'selectedMonth',
+            'selectedThreshold',
+            'availableYears',
+            'availableMonths',
+            'settings'
         ));
     }
 
     // -------------------------------------------------------
-    // TEACHER: strike off a student
+    // TEACHER & ADMIN: strike off an eligible student
     // -------------------------------------------------------
-
     public function store(Request $request)
     {
         $request->validate([
             'student_id'  => 'required|exists:students,id',
             'subject_id'  => 'required|exists:subjects,id',
+            'threshold'   => 'nullable|integer|min:1',
+            'month'       => 'nullable|string',
             'reason'      => 'nullable|string|max:500',
         ]);
 
-        $user  = Auth::user();
-        $staff = $user->staff;
+        $user      = Auth::user();
+        $staff     = $user->staff;
+        $studentId = (int) $request->student_id;
+        $subjectId = (int) $request->subject_id;
+        $settings  = StruckOffSetting::getSettings();
+        $threshold = (int) $request->input('threshold', $settings->absent_threshold);
+        $month     = $request->input('month');
 
-        if (!$staff) {
-            return back()->with('error', 'No staff record linked to your account.');
+        // Verify assignment if pure teacher
+        if ($staff && !$user->hasRole('admin') && !$user->is_super_admin) {
+            $assignment = DB::table('student_teacher_subjects')
+                ->where('staff_id', $staff->id)
+                ->where('student_id', $studentId)
+                ->where('subject_id', $subjectId)
+                ->whereNull('deleted_at')
+                ->first();
+
+            if (!$assignment) {
+                return back()->with('error', 'You are not authorized to strike off this student.');
+            }
         }
 
-        $studentId = $request->student_id;
-        $subjectId = $request->subject_id;
-
-        // --- Verify teacher is assigned to this student in this subject ---
-        $assignment = DB::table('student_teacher_subjects')
-            ->where('staff_id', $staff->id)
-            ->where('student_id', $studentId)
+        // Verify absence count
+        $attQuery = Attendance::where('student_id', $studentId)
             ->where('subject_id', $subjectId)
-            ->whereNull('deleted_at')
-            ->first();
+            ->where('status', 'absent');
 
-        if (!$assignment) {
-            return back()->with('error', 'You are not authorized to strike off this student.');
+        if ($month && $month !== 'all') {
+            $attQuery->whereRaw("DATE_FORMAT(attendance_date, '%Y-%m') = ?", [$month]);
         }
 
-        // --- Verify absence threshold ---
-        $absenceCount = Attendance::where('student_id', $studentId)
-            ->where('subject_id', $subjectId)
-            ->where('status', 'absent')
-            ->count();
+        $absenceCount = $attQuery->count();
 
-        if ($absenceCount <= 10) {
-            return back()->with('error', "Student only has {$absenceCount} absents in this subject. Must exceed 10 to strike off.");
+        if ($absenceCount < $threshold) {
+            return back()->with('error', "Student has {$absenceCount} absents in this subject, which is below the required threshold of {$threshold} to strike off.");
         }
 
-        // --- Check if already struck off ---
+        // Check if already struck off
         $alreadyStruckOff = StudentStruckOffLog::where('student_id', $studentId)
             ->where('status', 'struck_off')
             ->exists();
@@ -163,7 +237,7 @@ class StruckOffController extends Controller
             return back()->with('error', 'This student is already struck off. They must be readmitted before being struck off again.');
         }
 
-        // --- Get active admission ---
+        // Get active admission
         $admission = Admissions::where('student_id', $studentId)
             ->whereIn('status', ['Active', 'active', 'Admitted', 'admitted'])
             ->first();
@@ -172,21 +246,21 @@ class StruckOffController extends Controller
             return back()->with('error', 'No active admission record found for this student.');
         }
 
-        DB::transaction(function () use ($studentId, $admission, $staff, $subjectId, $absenceCount, $request) {
-            // 1. Create the struck-off log
+        $staffId = $staff ? $staff->id : ($user->staff_id ?? 1);
+
+        DB::transaction(function () use ($studentId, $admission, $staffId, $subjectId, $absenceCount, $request) {
             StudentStruckOffLog::create([
                 'student_id'             => $studentId,
                 'admission_id'           => $admission->id,
-                'struck_off_by'          => $staff->id,
+                'struck_off_by'          => $staffId,
                 'subject_id'             => $subjectId,
                 'absence_count_at_strike'=> $absenceCount,
                 'struck_off_at'          => now(),
                 'struck_off_reason'      => $request->reason,
-                'academic_year'          => $admission->academic_year,
+                'academic_year'          => $admission->academic_year ?? date('Y'),
                 'status'                 => 'struck_off',
             ]);
 
-            // 2. Update admission status
             $admission->update(['status' => 'Struck Off']);
         });
 
@@ -197,9 +271,10 @@ class StruckOffController extends Controller
     // -------------------------------------------------------
     // ADMIN / CLERK / PRINCIPAL: list all struck-off students
     // -------------------------------------------------------
-
     public function index(Request $request)
     {
+        $settings = StruckOffSetting::getSettings();
+
         $query = StudentStruckOffLog::with([
                 'student',
                 'struckOffBy',         // Staff (teacher)
@@ -231,13 +306,12 @@ class StruckOffController extends Controller
             ->orderByDesc('academic_year')
             ->pluck('academic_year');
 
-        return view('struck-off.index', compact('logs', 'statusFilter', 'availableYears'));
+        return view('struck-off.index', compact('logs', 'statusFilter', 'availableYears', 'settings'));
     }
 
     // -------------------------------------------------------
     // ADMIN / CLERK: readmit a struck-off student
     // -------------------------------------------------------
-
     public function readmit(Request $request, StudentStruckOffLog $log)
     {
         $request->validate([
@@ -248,18 +322,20 @@ class StruckOffController extends Controller
             return back()->with('error', 'This student is not currently struck off.');
         }
 
-        // --- Enforce 2 readmissions per academic year ---
+        $settings = StruckOffSetting::getSettings();
+        $maxAllowed = $settings->max_readmissions_per_year;
+
+        // Check how many times readmitted in this academic year
         $readmissionCount = StudentStruckOffLog::where('student_id', $log->student_id)
             ->where('academic_year', $log->academic_year)
             ->where('status', 'readmitted')
             ->count();
 
-        if ($readmissionCount >= 2) {
-            return back()->with('error', "This student has already been readmitted {$readmissionCount} times this academic year. Maximum 2 readmissions per year are allowed.");
+        if ($readmissionCount >= $maxAllowed) {
+            return back()->with('error', "This student has already been readmitted {$readmissionCount} times this academic year. Maximum {$maxAllowed} readmissions per year are allowed according to college policy.");
         }
 
         DB::transaction(function () use ($log, $request) {
-            // 1. Update the log entry
             $log->update([
                 'status'           => 'readmitted',
                 'readmitted_by'    => Auth::id(),
@@ -267,33 +343,54 @@ class StruckOffController extends Controller
                 'readmission_note' => $request->readmission_note,
             ]);
 
-            // 2. Restore admission status to Active
             Admissions::where('id', $log->admission_id)
                 ->update(['status' => 'Active']);
         });
 
         $student = $log->student;
-        return back()->with('success', "Student {$student->full_name} has been readmitted successfully.");
+        return back()->with('success', "Student {$student->full_name} has been readmitted successfully (Readmission #".($readmissionCount + 1)." of max {$maxAllowed}).");
+    }
+
+    // -------------------------------------------------------
+    // ADMIN / PRINCIPAL: update struck-off rules and limits
+    // -------------------------------------------------------
+    public function updateSettings(Request $request)
+    {
+        $request->validate([
+            'absent_threshold'          => 'required|integer|min:1|max:100',
+            'max_readmissions_per_year' => 'required|integer|min:1|max:10',
+            'calculation_period'        => 'required|in:monthly,session',
+        ]);
+
+        $settings = StruckOffSetting::getSettings();
+        $settings->update([
+            'absent_threshold'          => $request->absent_threshold,
+            'max_readmissions_per_year' => $request->max_readmissions_per_year,
+            'calculation_period'        => $request->calculation_period,
+        ]);
+
+        return back()->with('success', "Struck-off rules updated successfully: Default threshold is {$request->absent_threshold} absents, max readmissions is {$request->max_readmissions_per_year} per year.");
     }
 
     // -------------------------------------------------------
     // View full history for a single student
     // -------------------------------------------------------
-
     public function history(Student $student)
     {
+        $settings = StruckOffSetting::getSettings();
+
         $logs = StudentStruckOffLog::where('student_id', $student->id)
             ->with(['struckOffBy', 'subject', 'readmittedBy'])
             ->orderByDesc('struck_off_at')
             ->get();
 
-        $totalStruckOff   = $logs->count();
-        $currentYear      = date('Y');
-        $struckOffThisYear = $logs->where('academic_year', $currentYear)->count();
+        $totalStruckOff       = $logs->count();
+        $currentYear          = date('Y');
+        $struckOffThisYear    = $logs->where('academic_year', $currentYear)->count();
         $readmissionsThisYear = $logs->where('academic_year', $currentYear)->where('status', 'readmitted')->count();
 
         return view('struck-off.history', compact(
-            'student', 'logs', 'totalStruckOff', 'struckOffThisYear', 'readmissionsThisYear'
+            'student', 'logs', 'totalStruckOff', 'struckOffThisYear', 'readmissionsThisYear', 'settings'
         ));
     }
 }

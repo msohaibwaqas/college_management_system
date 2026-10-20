@@ -456,6 +456,8 @@ class CustomStudentReportController extends Controller
 
         $graceStatusMap = $this->calculateGraceStatusMap($studentIds, $allResults, $passThreshold);
 
+        $struckOffThreshold = \App\Models\StruckOffSetting::getSettings()->absent_threshold;
+
         // 7. Assemble Normalized Records
         $records = [];
         foreach ($admissions as $adm) {
@@ -470,7 +472,7 @@ class CustomStudentReportController extends Controller
             $presentCount = $att ? (int) $att->present_count : 0;
             $absentCount = $att ? (int) $att->absent_count : 0;
             $attPct = $totalClasses > 0 ? round(($presentCount / $totalClasses) * 100, 1) : 0;
-            $isStruckOffRisk = $absentCount > 10;
+            $isStruckOffRisk = $absentCount >= $struckOffThreshold;
 
             // Struck-off info
             $isStruckOff = ($adm->status === 'Struck Off');

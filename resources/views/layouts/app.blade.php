@@ -120,7 +120,7 @@
                 @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'accountant', 'hssc_accountant']))
                     
                     <li>
-                        <a href="#" class="menu-toggle {{ request()->routeIs(['students.*', 'bise-roll-numbers.*', 'staff.student_assignment', 'student-affairs.*']) ? 'active' : '' }}" data-target="students-menu">
+                        <a href="#" class="menu-toggle {{ request()->routeIs(['students.*', 'bise-roll-numbers.*', 'staff.student_assignment', 'student-affairs.*', 'struck-off.*']) ? 'active' : '' }}" data-target="students-menu">
                             <i class="fas fa-user-graduate"></i>
                             <span>Student affairs</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -134,6 +134,16 @@
                                 <li><a href="{{ route('student-affairs.sections.index') }}" class="{{ request()->routeIs('student-affairs.sections.*') ? 'active' : '' }}">Sections</a></li>
                                 <li><a href="{{ route('staff.student_assignment') }}" class="{{ request()->routeIs('staff.student_assignment') ? 'active' : '' }}">Assign Students</a></li>
                                 <li><a href="{{ route('bise-roll-numbers.index') }}" class="{{ request()->routeIs('bise-roll-numbers.*') ? 'active' : '' }}">Add BISE Roll No.</a></li>
+                                <li>
+                                    <a href="{{ route('struck-off.index') }}" class="{{ request()->routeIs('struck-off.index') ? 'active' : '' }}">
+                                        <i class="fas fa-user-slash me-1 text-danger"></i> Struck-Off Mgmt
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ route('struck-off.teacher') }}" class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}">
+                                        <i class="fas fa-exclamation-triangle me-1 text-warning"></i> Struck-Off Eligible
+                                    </a>
+                                </li>
                             @endif
                         </ul>
                     </li>
@@ -334,7 +344,7 @@
                 @if($activeRole == 'teacher')
                 <li class="sidebar-heading">Personal Spaces</li>
                 <li>
-                    <a href="#" class="menu-toggle {{ request()->routeIs(['attendance.*', 'he.attendance.*', 'he.results.*']) ? 'active' : '' }}" data-target="teacher-tasks-menu">
+                    <a href="#" class="menu-toggle {{ request()->routeIs(['attendance.*', 'he.attendance.*', 'he.results.*', 'struck-off.*']) ? 'active' : '' }}" data-target="teacher-tasks-menu">
                         <i class="fas fa-tasks"></i>
                         <span>Academic Tasks</span>
                         <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -344,6 +354,7 @@
                         <li class="submenu-header text-muted small ps-3 mt-2 Review ps-3 mt-2 mb-1">HSSC</li>
                         <li><a href="{{ route('attendance.index') }}" class="{{ request()->routeIs('attendance.index') ? 'active' : '' }}">Mark Attendance</a></li>
                         <li><a href="{{ route('attendance.reports.form') }}" class="{{ request()->routeIs('attendance.reports.*') ? 'active' : '' }}">Attendance History</a></li>
+                        <li><a href="{{ route('struck-off.teacher') }}" class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}"><i class="fas fa-user-slash text-danger me-1"></i> Struck-Off Students</a></li>
                         
                         {{-- ADP / BS --}}
                         <li class="submenu-header text-muted small ps-3 mt-2 mb-1">ADP / BS</li>

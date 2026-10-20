@@ -10,8 +10,16 @@
                 <i class="fas fa-user-slash text-danger me-2"></i>Struck-Off Students
             </h1>
             <p class="text-muted small mb-0 mt-1">
-                Manage struck-off students. Readmit where eligible (max 2 times per academic year).
+                Manage struck-off students. Readmit eligible students (max <strong>{{ $settings->max_readmissions_per_year }}</strong> times per academic year, threshold: <strong>&ge; {{ $settings->absent_threshold }} absents</strong>).
             </p>
+        </div>
+        <div class="d-flex gap-2 mt-2 mt-sm-0">
+            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                <i class="fas fa-cog me-1"></i> Policy Rules &amp; Limits
+            </button>
+            <a href="{{ route('struck-off.teacher') }}" class="btn btn-danger btn-sm">
+                <i class="fas fa-user-slash me-1"></i> Strike Off Eligible Students
+            </a>
         </div>
     </div>
 
@@ -27,6 +35,71 @@
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
     @endif
+
+    {{-- Policy Rules Modal --}}
+    <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-primary">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="settingsModalLabel">
+                        <i class="fas fa-sliders-h me-2"></i>Struck-Off Policy Rules &amp; Limits
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="{{ route('struck-off.settings.update') }}" method="POST">
+                    @csrf
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-dark">
+                                Absent Threshold to Strike Off (Absences)
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-user-times text-danger"></i></span>
+                                <input type="number" name="absent_threshold" class="form-control"
+                                       value="{{ $settings->absent_threshold }}" min="1" max="100" required>
+                                <span class="input-group-text">Absents</span>
+                            </div>
+                            <small class="text-muted">A student with this many or more absents becomes eligible for strike-off.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-dark">
+                                Max Readmissions Allowed Per Academic Year
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="fas fa-redo text-success"></i></span>
+                                <input type="number" name="max_readmissions_per_year" class="form-control"
+                                       value="{{ $settings->max_readmissions_per_year }}" min="1" max="10" required>
+                                <span class="input-group-text">Times</span>
+                            </div>
+                            <small class="text-muted">Maximum times a student can be readmitted in a single academic year.</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-dark">
+                                Default Calculation Period
+                            </label>
+                            <select name="calculation_period" class="form-select" required>
+                                <option value="monthly" {{ $settings->calculation_period === 'monthly' ? 'selected' : '' }}>
+                                    Monthly (e.g. 10 absents in a single month)
+                                </option>
+                                <option value="session" {{ $settings->calculation_period === 'session' ? 'selected' : '' }}>
+                                    Entire Session (Cumulative across the academic year)
+                                </option>
+                            </select>
+                            <small class="text-muted">Teachers can also toggle between specific months and all-time on the strike-off panel.</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i> Save Policy Rules
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
     {{-- Filters --}}
     <div class="card shadow-sm mb-4">
@@ -54,6 +127,11 @@
                         <i class="fas fa-times me-1"></i> Clear
                     </a>
                 </div>
+                <div class="col-auto ms-auto text-muted small">
+                    <span class="badge bg-light text-dark border">
+                        Current Policy: Threshold &ge; {{ $settings->absent_threshold }} absents | Max {{ $settings->max_readmissions_per_year }} readmissions/year
+                    </span>
+                </div>
             </form>
         </div>
     </div>
@@ -65,55 +143,66 @@
                 <i class="fas fa-list me-2"></i>
                 @if($statusFilter === 'struck_off') Currently Struck-Off
                 @elseif($statusFilter === 'readmitted') Readmitted Students
-                @else All Records @endif
-                <span class="badge bg-secondary ms-2">{{ $logs->total() }}</span>
+                @else All Struck-Off Records
+                @endif
+                <span class="badge bg-danger ms-2">{{ $logs->total() }}</span>
             </h6>
         </div>
         <div class="card-body p-0">
             @if($logs->isEmpty())
                 <div class="text-center py-5 text-muted">
-                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                    <p class="mb-0">No records found for this filter.</p>
+                    <i class="fas fa-info-circle fa-2x mb-2"></i>
+                    <p class="mb-0">No struck-off records found matching the criteria.</p>
                 </div>
             @else
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light">
                             <tr>
+                                <th>#</th>
                                 <th>Student</th>
                                 <th>Roll No</th>
-                                <th>Struck Off Subject</th>
-                                <th>By Teacher</th>
+                                <th>Class &amp; Year</th>
+                                <th>Subject</th>
                                 <th>Absents at Strike</th>
-                                <th>Struck Off Date</th>
-                                <th>Reason</th>
+                                <th>Struck Off By</th>
+                                <th>Struck Off At</th>
                                 <th>Status</th>
-                                <th>Readmitted By</th>
-                                <th class="text-center">Actions</th>
+                                <th>Readmission Info</th>
+                                <th class="text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($logs as $log)
+                            @foreach($logs as $i => $log)
                             <tr>
+                                <td class="text-muted small">{{ $logs->firstItem() + $i }}</td>
                                 <td>
                                     <div class="fw-bold">{{ $log->student?->full_name ?? '—' }}</div>
-                                    <small class="text-muted">Year: {{ $log->academic_year }}</small>
+                                    <small class="text-muted">{{ $log->student?->father_name ?? '' }}</small>
                                 </td>
                                 <td><code>{{ $log->admission?->college_roll_no ?? '—' }}</code></td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">
+                                        {{ $log->admission?->current_class }}th ({{ $log->academic_year }})
+                                    </span>
+                                </td>
                                 <td>{{ $log->subject?->name ?? '—' }}</td>
+                                <td>
+                                    <span class="badge bg-danger">
+                                        {{ $log->absence_count_at_strike }} Absents
+                                    </span>
+                                </td>
                                 <td>
                                     <div class="fw-semibold">{{ $log->struckOffBy?->full_name ?? '—' }}</div>
                                     <small class="text-muted">{{ $log->struckOffBy?->designation ?? '' }}</small>
                                 </td>
-                                <td class="text-center">
-                                    <span class="badge bg-danger">{{ $log->absence_count_at_strike }}</span>
-                                </td>
-                                <td>
-                                    <div>{{ $log->struck_off_at?->format('d M Y') }}</div>
-                                    <small class="text-muted">{{ $log->struck_off_at?->format('h:i A') }}</small>
-                                </td>
-                                <td class="text-muted small" style="max-width: 150px;">
-                                    {{ $log->struck_off_reason ?? '—' }}
+                                <td class="small text-muted">
+                                    {{ $log->struck_off_at?->format('d M Y, h:i A') }}
+                                    @if($log->struck_off_reason)
+                                        <div class="text-truncate" style="max-width:160px;" title="{{ $log->struck_off_reason }}">
+                                            <em>{{ $log->struck_off_reason }}</em>
+                                        </div>
+                                    @endif
                                 </td>
                                 <td>
                                     @if($log->status === 'struck_off')
@@ -146,11 +235,12 @@
                                                 ->where('academic_year', $log->academic_year)
                                                 ->where('status', 'readmitted')
                                                 ->count();
+                                            $maxReadmit = $settings->max_readmissions_per_year;
                                         @endphp
 
-                                        @if($readmissionsThisYear >= 2)
+                                        @if($readmissionsThisYear >= $maxReadmit)
                                             <span class="badge bg-secondary" title="Max readmissions reached for this year">
-                                                <i class="fas fa-lock me-1"></i>Limit Reached ({{ $readmissionsThisYear }}/2)
+                                                <i class="fas fa-lock me-1"></i>Limit Reached ({{ $readmissionsThisYear }}/{{ $maxReadmit }})
                                             </span>
                                         @else
                                             <button type="button"
@@ -158,7 +248,7 @@
                                                     data-bs-toggle="modal"
                                                     data-bs-target="#readmitModal{{ $log->id }}">
                                                 <i class="fas fa-user-check me-1"></i> Readmit
-                                                <span class="badge bg-white text-success ms-1">{{ $readmissionsThisYear }}/2</span>
+                                                <span class="badge bg-white text-success ms-1">{{ $readmissionsThisYear }}/{{ $maxReadmit }}</span>
                                             </button>
 
                                             <div class="modal fade" id="readmitModal{{ $log->id }}" tabindex="-1" aria-hidden="true">
@@ -175,7 +265,7 @@
                                                                 Readmitting <strong>{{ $log->student?->full_name }}</strong>.
                                                                 They have been readmitted
                                                                 <strong>{{ $readmissionsThisYear }}</strong> time(s) this year.
-                                                                Maximum allowed: <strong>2</strong>.
+                                                                Maximum allowed by policy: <strong>{{ $maxReadmit }}</strong>.
                                                             </div>
                                                             <form id="readmitForm{{ $log->id }}"
                                                                   action="{{ route('struck-off.readmit', $log->id) }}"
@@ -186,7 +276,7 @@
                                                                         Readmission Note <span class="text-muted">(optional)</span>
                                                                     </label>
                                                                     <textarea name="readmission_note" class="form-control" rows="3"
-                                                                              placeholder="Reason for readmission..."></textarea>
+                                                                              placeholder="e.g. Paid readmission fee, submitted apology..."></textarea>
                                                                 </div>
                                                             </form>
                                                         </div>
