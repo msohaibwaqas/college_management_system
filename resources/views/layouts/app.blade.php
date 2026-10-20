@@ -114,27 +114,13 @@
                 </a>
             </li>
 
-            {{-- Struck-Off Management (Direct Global Access) --}}
-            <li>
-                <a href="{{ route('struck-off.index') }}" class="{{ request()->routeIs('struck-off.index') || (request()->routeIs('struck-off.*') && !request()->routeIs('struck-off.teacher')) ? 'active' : '' }}">
-                    <i class="fas fa-user-slash text-danger"></i>
-                    <span>Struck-Off Students</span>
-                </a>
-            </li>
-            <li>
-                <a href="{{ route('struck-off.teacher') }}" class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}">
-                    <i class="fas fa-user-times text-warning"></i>
-                    <span>Strike Off Eligible</span>
-                </a>
-            </li>
-
 
             {{-- HSSC Content --}}
             @if($sidebarView == 'HSSC')
                 @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'accountant', 'hssc_accountant', 'super_admin']) || ($user && $user->is_super_admin))
                     
                     <li>
-                        <a href="#" class="menu-toggle {{ request()->routeIs(['students.*', 'bise-roll-numbers.*', 'staff.student_assignment', 'student-affairs.*', 'struck-off.*']) ? 'active' : '' }}" data-target="students-menu">
+                        <a href="#" class="menu-toggle {{ request()->routeIs(['students.*', 'bise-roll-numbers.*', 'staff.student_assignment', 'student-affairs.*']) || ($activeRole != 'teacher' && request()->routeIs('struck-off.*')) ? 'active' : '' }}" data-target="students-menu">
                             <i class="fas fa-user-graduate"></i>
                             <span>Student affairs</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -385,7 +371,7 @@
                 @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'bs_clerk', 'bs_admin', 'teacher', 'bs_accountant']))
                     {{-- Student affairs --}}
                     <li>
-                        <a href="#" class="menu-toggle {{ request()->routeIs(['admissions.*', 'he.roll-numbers.*']) ? 'active' : '' }}" data-target="he-students-menu">
+                        <a href="#" class="menu-toggle {{ request()->routeIs(['admissions.*', 'he.roll-numbers.*']) || ($activeRole != 'teacher' && request()->routeIs('struck-off.*')) ? 'active' : '' }}" data-target="he-students-menu">
                             <i class="fas fa-user-graduate"></i>
                             <span>Student affairs</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -393,8 +379,10 @@
                         <ul class="submenu" id="he-students-menu">
                             <li><a href="{{ route('admissions.index') }}" class="{{ request()->routeIs('admissions.*') ? 'active' : '' }}">Students</a></li>
                             <li><a href="{{ route('he.roll-numbers.index') }}" class="{{ request()->routeIs('he.roll-numbers.*') ? 'active' : '' }}">University Roll Nos</a></li>
+                            @if($activeRole != 'teacher')
                             <li><a href="{{ route('struck-off.index') }}" class="{{ request()->routeIs('struck-off.index') ? 'active' : '' }}"><i class="fas fa-user-slash text-danger me-1"></i> Struck-Off Students</a></li>
                             <li><a href="{{ route('struck-off.teacher') }}" class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}"><i class="fas fa-user-times text-warning me-1"></i> Strike Off Eligible</a></li>
+                            @endif
                         </ul>
                     </li>
 
