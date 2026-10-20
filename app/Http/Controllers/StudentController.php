@@ -21,6 +21,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use App\Services\FileUploadService;
+use App\Http\Requests\Student\StoreStudentRequest;
+use App\Http\Requests\Student\UpdateStudentRequest;
+use App\Actions\Student\CreateStudentAction;
+use App\Actions\Student\UpdateStudentAction;
 
 class StudentController extends Controller
 {
@@ -146,217 +150,20 @@ class StudentController extends Controller
     /**
      * Store new student
      */
-    public function store(Request $request)
+    public function store(StoreStudentRequest $request, CreateStudentAction $createStudentAction)
     {
         try {
-            $request->validate([
-            'first_name' => 'required|string|max:80',
-            'last_name' => 'required|string|max:80',
-            'date_of_birth' => 'required|date',
-            'gender' => 'required|in:Male,Female,Other',
-            'student_cnic' => 'nullable|string|max:15|unique:student_attributes,student_cnic',
-            'blood_group_id' => 'nullable|exists:blood_groups,id',
-            'quota_id' => 'nullable|exists:quotas,id',
-            'subject_group_id' => 'required|exists:subject_groups,id',
-            'religion' => 'nullable|string|max:50',
-            'nationality' => 'nullable|string|max:50',
-            'domicile' => 'nullable|string|max:50',
-            'father_name' => 'required|string|max:120',
-            'father_cnic' => 'nullable|string|max:15',
-            'father_contact' => 'nullable|string|max:20',
-            'father_occupation' => 'nullable|string|max:120',
-            'father_annual_income' => 'nullable|integer',
-            'student_contact' => 'nullable|string|max:20',
-            'whatsapp_no' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:120',
-            'address' => 'nullable|string',
-            'admission_year' => 'required|digits:4|integer',
-            'academic_year' => 'required|digits:4|integer|gte:admission_year',
-            'program_type' => 'required|in:Inter,ADP,BS,DIT',
-            'program_name' => 'nullable|string|max:100', // Required if ADP/BS
-            'shift' => 'nullable|in:Morning,Evening',
-            'semester' => 'nullable|integer|min:1|max:8',
-            'college_roll_no' => [
-                'required',
-                'string',
-                Rule::unique('admissions', 'college_roll_no')
-                    ->where(function ($query) use ($request) {
-                        return $query->where('admission_year', $request->admission_year)
-                                     ->where('program_type', $request->program_type)
-                                     ->where('program_name', trim($request->program_name ?? 'FSc/FA'));
-                    })
-            ],
-            'hssc_reg_no' => 'required|string|unique:admissions,hssc_reg_no',
-            'current_class' => 'nullable|string', // Nullable for ADP/BS
-            'ssc_records.*.bise_id' => 'required|exists:bise_records,id',
-            'ssc_records.*.roll_no' => 'required|string',
-            'ssc_records.*.reg_no' => 'required|string',
-            'ssc_records.*.school_name' => 'required|string',
-            'ssc_records.*.total_mark' => 'required|integer',
-            'ssc_records.*.obtained_mark' => 'required|integer|lte:ssc_records.*.total_mark',
-            'ssc_records.*.passing_year' => 'required|digits:4|integer',
-            'ssc_records.*.passing_session' => 'required|in:1st Annual,2nd Annual',
-            'ssc_records.*.ssc_group' => 'required|in:Science,Arts',
-            'picture' => 'nullable|image|mimes:jpeg,jpg,png|max:2048',
-            ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            throw $e;
-        }
-
-        try {
-            DB::transaction(function () use ($request) {
-                // Handle picture upload
-                $picturePath = null;
-                if ($request->hasFile('picture')) {
-                    $picturePath = $this->fileUploadService->upload($request->file('picture'), 'student_pictures');
-                }
-
-                // 1. Student
-                $student = Student::create([
-                    'first_name' => $request->first_name,
-                    'last_name' => $request->last_name,
-                    'date_of_birth' => $request->date_of_birth,
-                    'gender' => $request->gender,
-                    'cnic' => $request->student_cnic,
-                    'picture' => $picturePath,
-                    'created_by' => Auth::id(),
-                ]);
-
-                // 2. Student Attribute
-                StudentAttribute::create([
-                    'student_id' => $student->id,
-                    'blood_group_id' => $request->blood_group_id,
-                    'quota_id' => $request->quota_id,
-                    'religion' => $request->religion,
-                    'nationality' => $request->nationality,
-                    'domicile' => $request->domicile,
-                    'student_cnic' => $request->student_cnic,
-                    'created_by' => Auth::id(),
-                ]);
-
-                // 3. Father
-                Father::create([
-                    'student_id' => $student->id,
-                    'name' => $request->father_name,
-                    'cnic' => $request->father_cnic,
-                    'contact' => $request->father_contact,
-                    'occupation' => $request->father_occupation,
-                    'annual_income' => $request->father_annual_income,
-                    'created_by' => Auth::id(),
-                ]);
-
-                // 4. Contact
-                Contact::create([
-                    'student_id' => $student->id,
-                    'student_contact' => $request->student_contact,
-                    'whatsapp_no' => $request->whatsapp_no,
-                    'email' => $request->email,
-                    'address' => $request->address,
-                    'picture' => $picturePath,
-                    'created_by' => Auth::id(),
-                ]);
-
-                // 5. Admission
-                $admission = Admissions::create([
-                    'student_id' => $student->id,
-                    'admission_year' => $request->admission_year,
-                    'academic_year' => $request->academic_year,
-                    'college_roll_no' => $request->college_roll_no,
-                    'hssc_reg_no' => $request->hssc_reg_no,
-                    'current_class' => $request->current_class ?? 'N/A',
-                    'program_type' => $request->program_type,
-                    'program_name' => trim($request->program_name ?? 'FSc/FA'),
-                    'shift' => $request->shift,
-                    'semester' => $request->semester ?? 1,
-                    'status' => 'Active',
-                    'created_by' => Auth::id(),
-                ]);
-
-                // 6. SSC Records
-                foreach ($request->ssc_records as $record) {
-                    SscRecord::create([
-                        'student_id' => $student->id,
-                        'bise_id' => $record['bise_id'],
-                        'roll_no' => $record['roll_no'],
-                        'reg_no' => $record['reg_no'],
-                        'school_name' => $record['school_name'],
-                        'total_mark' => $record['total_mark'],
-                        'obtained_mark' => $record['obtained_mark'],
-                        'passing_year' => $record['passing_year'],
-                        'passing_session' => $record['passing_session'],
-                        'ssc_group' => $record['ssc_group'],
-                        'created_by' => Auth::id(),
-                    ]);
-                }
-
-                // 7. Assign compulsory subjects
-                $compulsorySubjectIds = $request->compulsory_subjects;
-                if (empty($compulsorySubjectIds)) {
-                    $religion = $request->religion ?? 'Islam';
-                    $nationality = $request->nationality ?? 'Pakistani';
-                    $classLevel = $request->current_class ?? '11';
-                    $ruleSubjects = \App\Models\SubjectAssignmentRule::getSubjectsForStudent($classLevel, $nationality, $religion);
-                    $compulsorySubjectIds = $ruleSubjects->pluck('id')->toArray();
-                }
-
-                if (!empty($compulsorySubjectIds)) {
-                    foreach ($compulsorySubjectIds as $subjectId) {
-                        StudentCompulsorySubject::create([
-                            'student_id' => $student->id,
-                            'subject_id' => $subjectId,
-                            'class_level' => $request->current_class ?? '11',
-                            'created_by' => Auth::id(),
-                        ]);
-                    }
-                }
-
-                if ($request->elective_subjects) {
-                    foreach ($request->elective_subjects as $sequence => $subjectId) {
-                        StudentElectiveSubject::create([
-                            'student_id' => $student->id,
-                            'subject_id' => $subjectId,
-                            'subject_group_id' => $request->subject_group_id,
-                            'sequence' => $sequence + 1,
-                            'created_by' => Auth::id(),
-                        ]);
-                    }
-                }
-            });
+            $createStudentAction->execute(
+                $request->validated(),
+                $request->file('picture'),
+                Auth::id()
+            );
 
             return redirect()->route('students.index')->with('success', 'Student added successfully!');
-
         } catch (\Illuminate\Database\QueryException $e) {
-            \Log::error('DB Exception in store: ' . $e->getMessage());
-            // Handle database constraint violations
-            if ($e->getCode() == 23000) {
-                // Integrity constraint violation
-                if (strpos($e->getMessage(), 'uq_ssc_roll_reg') !== false) {
-                    return redirect()->back()
-                        ->withInput()
-                        ->with('error', 'The SSC Roll Number and Registration Number combination already exists in the system. Please check and try again.');
-                } elseif (strpos($e->getMessage(), 'college_roll_no') !== false) {
-                    return redirect()->back()
-                        ->withInput()
-                        ->with('error', 'The College Roll Number already exists for this admission year/program. Please use a different roll number.');
-                } elseif (strpos($e->getMessage(), 'hssc_reg_no') !== false) {
-                    return redirect()->back()
-                        ->withInput()
-                        ->with('error', 'The HSSC Registration Number already exists. Please use a different registration number.');
-                } else {
-                    return redirect()->back()
-                        ->withInput()
-                        ->with('error', 'A duplicate entry was detected. Error: ' . $e->getMessage());
-                }
-            }
-            
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'Database error: ' . $e->getMessage());
-
+            return $this->handleDatabaseException($e);
         } catch (\Exception $e) {
             \Log::error('General Exception in store: ' . $e->getMessage());
-            \Log::error($e->getTraceAsString());
-            
             return redirect()->back()
                 ->withInput()
                 ->with('error', 'An unexpected error occurred: ' . $e->getMessage());
@@ -460,372 +267,67 @@ class StudentController extends Controller
     /**
      * Update student
      */
-    public function update(Request $request, Student $student)
+    public function update(UpdateStudentRequest $request, Student $student, UpdateStudentAction $updateStudentAction)
     {
-        // Determine if we should restrict
         if (Auth::user()?->isTeacher()) {
             return redirect()->route('students.index')->with('error', 'Access denied.');
         }
 
-        // Get the admission record to ignore in unique checks
-        $admission = $student->admissions->first();
-        $admissionId = $admission ? $admission->id : null;
-
-        // Auto-merge defaults before validation
-        $biseBahawalpur = BiseRecord::where('name', 'like', '%Bahawalpur%')->first();
-        $biseId = $biseBahawalpur ? $biseBahawalpur->id : 1;
-
-        $mergeData = [];
-
-        // 1. Last Name & First Name
-        if (empty(trim($request->last_name ?? ''))) {
-            $fullName = trim(preg_replace('/\s+/', ' ', $request->first_name ?? ''));
-            $parts = explode(' ', $fullName);
-            if (count($parts) > 1) {
-                $mergeData['last_name'] = array_pop($parts);
-                $mergeData['first_name'] = implode(' ', $parts);
-            } else {
-                $mergeData['last_name'] = $fullName;
-            }
-        }
-
-        // 2. Domicile
-        if (empty(trim($request->domicile ?? ''))) {
-            $mergeData['domicile'] = 'Bahawalnagar';
-        }
-
-        // 3. Student Contact
-        if (empty(trim($request->student_contact ?? ''))) {
-            $mergeData['student_contact'] = $request->hssc_reg_no;
-        }
-
-        // 4. SSC Record fields
-        $ssc = $request->input('ssc', []);
-        if (!is_array($ssc)) {
-            $ssc = [];
-        }
-        if (empty($ssc['bise_id'])) $ssc['bise_id'] = $biseId;
-        if (empty(trim($ssc['roll_no'] ?? ''))) $ssc['roll_no'] = $request->college_roll_no;
-        if (empty(trim($ssc['reg_no'] ?? ''))) $ssc['reg_no'] = $request->hssc_reg_no;
-        if (empty(trim($ssc['school_name'] ?? ''))) $ssc['school_name'] = 'Govt. High School Chishtian';
-        if (empty($ssc['total_mark'])) $ssc['total_mark'] = 1200;
-        if (empty($ssc['obtained_mark'])) $ssc['obtained_mark'] = 600;
-        if (empty($ssc['passing_year'])) $ssc['passing_year'] = (int)date('Y');
-        if (empty($ssc['passing_session'])) $ssc['passing_session'] = '1st Annual';
-        if (empty($ssc['ssc_group'])) $ssc['ssc_group'] = 'Science';
-        $mergeData['ssc'] = $ssc;
-
-        $request->merge($mergeData);
-
-        $request->validate([
-            'first_name' => 'required|string|max:80',
-            'last_name' => 'required|string|max:80',
-            'date_of_birth' => 'required|date',
-            'gender' => 'nullable|in:Male,Female,Other', // Gender might not be in edit form
-            'student_cnic' => 'nullable|string|max:15|unique:student_attributes,student_cnic,' . ($student->attribute ? $student->attribute->id : 'NULL'),
-            'blood_group_id' => 'nullable|exists:blood_groups,id',
-            'quota_id' => 'nullable|exists:quotas,id',
-            'subject_group_id' => 'required|exists:subject_groups,id',
-            'father_name' => 'required|string|max:120',
-            'father_cnic' => 'nullable|string|max:15',
-            'father_contact' => 'nullable|string|max:20',
-            'father_occupation' => 'nullable|string|max:120',
-            'father_annual_income' => 'nullable|integer',
-            'student_contact' => 'nullable|string|max:20',
-            'whatsapp_no' => 'nullable|string|max:20',
-            'email' => 'nullable|email|max:120',
-            'address' => 'nullable|string',
-            'admission_year' => 'required|digits:4|integer',
-            'academic_year' => 'required|digits:4|integer|gte:admission_year',
-            'program_type' => 'required|in:Inter,ADP,BS,DIT',
-            'program_name' => 'nullable|string|max:100', // Required if ADP/BS
-            'shift' => 'nullable|in:Morning,Evening',
-            'semester' => 'nullable|integer|min:1|max:8',
-            'college_roll_no' => [
-                'required',
-                'string',
-                Rule::unique('admissions', 'college_roll_no')
-                    ->where(function ($query) use ($request) {
-                        return $query->where('admission_year', $request->admission_year)
-                                     ->where('program_type', $request->program_type)
-                                     ->where('program_name', trim($request->program_name ?? 'FSc/FA'));
-                    })
-                    ->ignore($admissionId)
-            ],
-            'hssc_reg_no' => 'required|string|unique:admissions,hssc_reg_no,' . $admissionId,
-            'current_class' => 'nullable|string',
-            'status' => 'required|in:Applied,Admitted,Active,Graduated,Dropped,Suspended',
-            'ssc.bise_id' => 'required|exists:bise_records,id',
-            'ssc.roll_no' => 'required|string',
-            'ssc.reg_no' => 'required|string',
-            'ssc.school_name' => 'required|string',
-            'ssc.total_mark' => 'required|integer',
-            'ssc.obtained_mark' => 'required|integer|lte:ssc.total_mark',
-            'ssc.passing_year' => 'required|digits:4|integer',
-            'ssc.passing_session' => 'required|in:1st Annual,2nd Annual',
-            'ssc.ssc_group' => 'required|in:Science,Arts',
-            'elective_subjects' => 'nullable|array|size:3',
-            'elective_subjects.*' => 'nullable|exists:subjects,id',
-            'picture' => 'nullable|image|mimes:jpeg,jpg,png|max:2048',
-        ]);
-
-    try {
-        DB::transaction(function () use ($request, $student) {
-            // Handle picture upload
-            $picturePath = null;
-            if ($request->hasFile('picture')) {
-                $picturePath = $this->fileUploadService->update(
-                    $request->file('picture'),
-                    $student->picture,
-                    'student_pictures'
-                );
-            }
-
-            // 1. Update Student
-            $studentData = [
-                'first_name' => $request->first_name,
-                'last_name' => $request->last_name,
-                'date_of_birth' => $request->date_of_birth,
-                'cnic' => $request->student_cnic,
-            ];
-            
-            // Only update gender if it's provided (since it's not in the edit form)
-            if ($request->filled('gender')) {
-                $studentData['gender'] = $request->gender;
-            }
-            
-            $student->update($studentData);
-            
-            if ($picturePath) {
-                $student->update(['picture' => $picturePath]);
-            }
-
-            // 2. Update Student Attribute
-            $studentAttribute = $student->attribute;
-            if ($studentAttribute) {
-                $studentAttribute->update([
-                    'blood_group_id' => $request->blood_group_id,
-                    'quota_id' => $request->quota_id,
-                    'religion' => $request->religion,
-                    'nationality' => $request->nationality,
-                    'domicile' => $request->domicile,
-                    'student_cnic' => $request->student_cnic,
-                ]);
-            } else {
-                $student->attribute()->create([
-                    'blood_group_id' => $request->blood_group_id,
-                    'quota_id' => $request->quota_id,
-                    'religion' => $request->religion,
-                    'nationality' => $request->nationality,
-                    'domicile' => $request->domicile,
-                    'student_cnic' => $request->student_cnic,
-                ]);
-            }
-
-            // 3. Update Father
-            $father = $student->father;
-            if ($father) {
-                $father->update([
-                    'name' => $request->father_name,
-                    'cnic' => $request->father_cnic,
-                    'contact' => $request->father_contact,
-                    'occupation' => $request->father_occupation,
-                    'annual_income' => $request->father_annual_income,
-                ]);
-            } else {
-                $student->father()->create([
-                    'name' => $request->father_name,
-                    'cnic' => $request->father_cnic,
-                    'contact' => $request->father_contact,
-                    'occupation' => $request->father_occupation,
-                    'annual_income' => $request->father_annual_income,
-                ]);
-            }
-
-            // 4. Update Contact
-            $contactData = [
-                'student_contact' => $request->student_contact,
-                'whatsapp_no' => $request->whatsapp_no,
-                'email' => $request->email,
-                'address' => $request->address,
-            ];
-
-            if ($picturePath) {
-                $contactData['picture'] = $picturePath;
-            }
-
-            $contact = $student->contact;
-            if ($contact) {
-                $contact->update($contactData);
-            } else {
-                $student->contact()->create($contactData);
-            }
-
-            // 5. Update Admission
-            $admission = $student->admissions->first();
-            if ($admission) {
-                $admission->update([
-                    'admission_year' => $request->admission_year,
-                    'academic_year' => $request->academic_year,
-                    'college_roll_no' => $request->college_roll_no,
-                    'hssc_reg_no' => $request->hssc_reg_no,
-                    'current_class' => $request->current_class,
-                    'program_type' => $request->program_type,
-                    'program_name' => trim($request->program_name ?? 'FSc/FA'),
-                    'shift' => $request->shift,
-                    'semester' => 1,
-                    'status' => $request->status,
-                ]);
-            }
-
-            // 6. Update SSC Record (single) - Use updateOrCreate to avoid duplicates
-            SscRecord::updateOrCreate(
-                ['student_id' => $student->id],
-                [
-                    'bise_id' => $request->ssc['bise_id'],
-                    'roll_no' => $request->ssc['roll_no'],
-                    'reg_no' => $request->ssc['reg_no'],
-                    'school_name' => $request->ssc['school_name'],
-                    'total_mark' => $request->ssc['total_mark'],
-                    'obtained_mark' => $request->ssc['obtained_mark'],
-                    'passing_year' => $request->ssc['passing_year'],
-                    'passing_session' => $request->ssc['passing_session'],
-                    'ssc_group' => $request->ssc['ssc_group'],
-                ]
+        try {
+            $updateStudentAction->execute(
+                $student,
+                $request->validated(),
+                $request->file('picture'),
+                Auth::id()
             );
 
-            // 7. Update Elective Subjects (ONLY if provided in request)
-            if ($request->filled('elective_subjects')) {
-                // Get new elective IDs
-                $newElectiveIds = collect($request->elective_subjects)->filter()->values();
-                
-                // Get current compulsory subject IDs
-                $compulsoryIds = $student->compulsorySubjects()->pluck('subject_id');
-                
-                // All valid subject IDs for this student
-                $validSubjectIds = $compulsoryIds->merge($newElectiveIds)->unique();
-                
-                // Delete StudentTeacherSubject records for subjects that are no longer assigned
-                $unassignedModels = \App\Models\StudentTeacherSubject::where('student_id', $student->id)
-                    ->whereNotIn('subject_id', $validSubjectIds)
-                    ->get();
-                
-                foreach ($unassignedModels as $unassignedModel) {
-                    $unassignedModel->delete();
-                }
-
-                // Clean up section mappings for dropped subjects so data does not become orphaned
-                \App\Models\StudentSubjectSection::where('student_id', $student->id)
-                    ->whereNotIn('subject_id', $validSubjectIds)
-                    ->delete();
-
-                // Delete existing electives (including soft deleted ones)
-                StudentElectiveSubject::where('student_id', $student->id)->forceDelete();
-
-                // Log for debugging
-                \Log::info('Updating electives for student ' . $student->id, [
-                    'elective_subjects' => $request->elective_subjects
-                ]);
-
-                // Insert updated electives
-                foreach ($request->elective_subjects as $sequence => $subjectId) {
-                    if (!empty($subjectId)) {
-                        StudentElectiveSubject::create([
-                            'student_id' => $student->id,
-                            'subject_id' => $subjectId,
-                            'subject_group_id' => $request->subject_group_id,
-                            'sequence' => $sequence + 1,
-                            'created_by' => Auth::id(),
-                        ]);
-                    }
-                }
+            $redirectTo = $request->input('redirect_to');
+            if (!empty($redirectTo) && (str_contains($redirectTo, '/students') || str_contains($redirectTo, 'students'))) {
+                return redirect($redirectTo)->with('success', 'Student updated successfully!');
             }
 
-            // 8. Update / Sync Compulsory Subjects
-            $compulsorySubjectIds = $request->compulsory_subjects;
-            if (empty($compulsorySubjectIds)) {
-                $religion = $request->religion ?? optional($student->attribute)->religion ?? 'Islam';
-                $nationality = $request->nationality ?? optional($student->attribute)->nationality ?? 'Pakistani';
-                $classLevel = $request->current_class ?? optional($student->admissions->first())->current_class ?? '11';
-                $ruleSubjects = \App\Models\SubjectAssignmentRule::getSubjectsForStudent($classLevel, $nationality, $religion);
-                $compulsorySubjectIds = $ruleSubjects->pluck('id')->toArray();
-            }
-
-            if (!empty($compulsorySubjectIds)) {
-                StudentCompulsorySubject::where('student_id', $student->id)->forceDelete();
-                foreach ($compulsorySubjectIds as $subjectId) {
-                    StudentCompulsorySubject::create([
-                        'student_id' => $student->id,
-                        'subject_id' => $subjectId,
-                        'class_level' => $request->current_class ?? optional($student->admissions->first())->current_class ?? '11',
-                        'created_by' => Auth::id(),
-                    ]);
-                }
-            }
-
-            // Clean up teacher assignments and section mappings for subjects no longer assigned
-            $validSubjectIds = $student->compulsorySubjects()->pluck('subject_id')
-                ->merge($student->electives()->pluck('subject_id'))
-                ->unique();
-
-            \App\Models\StudentTeacherSubject::where('student_id', $student->id)
-                ->whereNotIn('subject_id', $validSubjectIds)
-                ->delete();
-
-            \App\Models\StudentSubjectSection::where('student_id', $student->id)
-                ->whereNotIn('subject_id', $validSubjectIds)
-                ->delete();
-        });
-
-        $redirectTo = $request->input('redirect_to');
-        if (!empty($redirectTo) && (str_contains($redirectTo, '/students') || str_contains($redirectTo, 'students'))) {
-            return redirect($redirectTo)->with('success', 'Student updated successfully!');
+            return redirect()->route('students.index')->with('success', 'Student updated successfully!');
+        } catch (\Illuminate\Database\QueryException $e) {
+            return $this->handleDatabaseException($e);
+        } catch (\Exception $e) {
+            \Log::error('Student update failed: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'An error occurred while updating the student. Please try again or contact support if the problem persists.');
         }
+    }
 
-        return redirect()->route('students.index')->with('success', 'Student updated successfully!');
-        
-    } catch (\Illuminate\Database\QueryException $e) {
-        // Handle database constraint violations
+    /**
+     * Handle common duplicate constraint violations in student creation/updates.
+     */
+    protected function handleDatabaseException(\Illuminate\Database\QueryException $e)
+    {
+        \Log::error('Student DB Exception: ' . $e->getMessage());
+
         if ($e->getCode() == 23000) {
-            // Integrity constraint violation
-            if (strpos($e->getMessage(), 'uq_ssc_roll_reg') !== false) {
+            if (str_contains($e->getMessage(), 'uq_ssc_roll_reg')) {
                 return redirect()->back()
                     ->withInput()
                     ->with('error', 'The SSC Roll Number and Registration Number combination already exists in the system. Please check and try again.');
-            } elseif (strpos($e->getMessage(), 'college_roll_no') !== false) {
+            } elseif (str_contains($e->getMessage(), 'college_roll_no')) {
                 return redirect()->back()
                     ->withInput()
-                    ->with('error', 'The College Roll Number already exists for this admission year. Please use a different roll number.');
-            } elseif (strpos($e->getMessage(), 'hssc_reg_no') !== false) {
+                    ->with('error', 'The College Roll Number already exists for this admission year/program. Please use a different roll number.');
+            } elseif (str_contains($e->getMessage(), 'hssc_reg_no')) {
                 return redirect()->back()
                     ->withInput()
                     ->with('error', 'The HSSC Registration Number already exists. Please use a different registration number.');
             } else {
-                // Log the full error for debugging
-                \Log::error('Duplicate entry error: ' . $e->getMessage());
-                
                 return redirect()->back()
                     ->withInput()
-                    ->with('error', 'A duplicate entry was detected. Error: ' . $e->getMessage() . ' Please check your data and try again.');
+                    ->with('error', 'A duplicate entry was detected: ' . $e->getMessage());
             }
         }
-        
-        // Log the error for debugging
-        \Log::error('Student update failed: ' . $e->getMessage());
-        
+
         return redirect()->back()
             ->withInput()
-            ->with('error', 'An error occurred while updating the student. Please try again or contact support if the problem persists.');
-            
-    } catch (\Exception $e) {
-        // Handle general exceptions
-        \Log::error('Student update failed: ' . $e->getMessage());
-        
-        return redirect()->back()
-            ->withInput()
-            ->with('error', 'An unexpected error occurred. Please try again or contact support if the problem persists.');
+            ->with('error', 'A database error occurred: ' . $e->getMessage());
     }
-}
 
     /**
      * Delete student (Soft Delete)
