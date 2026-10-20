@@ -491,6 +491,22 @@ class User extends Authenticatable
         return $this->getActiveRole() === 'student';
     }
 
+    /**
+     * Check if user is currently operating in a BS/ADP specific role.
+     */
+    public function isBsRole(): bool
+    {
+        return in_array($this->getActiveRole(), ['bs_clerk', 'bs_admin', 'bs_accountant']);
+    }
+
+    /**
+     * Check if user is currently operating in an HSSC specific role.
+     */
+    public function isHsscRole(): bool
+    {
+        return in_array($this->getActiveRole(), ['hssc_clerk', 'hssc_admin', 'hssc_accountant']);
+    }
+
     public function updateLastLogin(): void
     {
         $this->update(['last_login_at' => now()]);

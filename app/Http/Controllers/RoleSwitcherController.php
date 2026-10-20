@@ -28,7 +28,7 @@ class RoleSwitcherController extends Controller
         session(['active_role' => $role]);
 
         // Default sidebar view based on role
-        if (in_array($role, ['bs_clerk', 'bs_admin', 'bs_accountant'])) {
+        if ($user->isBsRole()) {
             session(['sidebar_view' => 'BS']);
         } else {
             session(['sidebar_view' => 'HSSC']);

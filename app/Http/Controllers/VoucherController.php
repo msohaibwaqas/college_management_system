@@ -135,8 +135,7 @@ class VoucherController extends Controller
      */
     public function bulkGenerateClass12Form()
     {
-        $activeRole = session('active_role');
-        if (in_array($activeRole, ['bs_clerk', 'bs_admin', 'bs_accountant'])) {
+        if (Auth::user()?->isBsRole()) {
             abort(403, 'Unauthorized. BS/ADP roles cannot generate HSSC bulk vouchers.');
         }
 
@@ -176,8 +175,7 @@ class VoucherController extends Controller
      */
     public function bulkGenerateClass12(Request $request)
     {
-        $activeRole = session('active_role');
-        if (in_array($activeRole, ['bs_clerk', 'bs_admin', 'bs_accountant'])) {
+        if (Auth::user()?->isBsRole()) {
             abort(403, 'Unauthorized. BS/ADP roles cannot generate HSSC bulk vouchers.');
         }
 
@@ -252,8 +250,7 @@ class VoucherController extends Controller
      */
     public function bulkGenerateHEForm()
     {
-        $activeRole = session('active_role');
-        if (in_array($activeRole, ['hssc_clerk', 'hssc_admin', 'hssc_accountant'])) {
+        if (Auth::user()?->isHsscRole()) {
             abort(403, 'Unauthorized. HSSC roles cannot generate BS/ADP bulk vouchers.');
         }
 
@@ -293,8 +290,7 @@ class VoucherController extends Controller
      */
     public function bulkGenerateHE(Request $request)
     {
-        $activeRole = session('active_role');
-        if (in_array($activeRole, ['hssc_clerk', 'hssc_admin', 'hssc_accountant'])) {
+        if (Auth::user()?->isHsscRole()) {
             abort(403, 'Unauthorized. HSSC roles cannot generate BS/ADP bulk vouchers.');
         }
 

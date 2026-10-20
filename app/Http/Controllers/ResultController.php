@@ -11,9 +11,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Notifications\ResultMarkChanged;
+use App\Services\ResultService;
 
 class ResultController extends Controller
 {
+    public function __construct(
+        protected ResultService $resultService
+    ) {}
     /**
      * Display a listing of the results.
      */
@@ -54,24 +58,11 @@ class ResultController extends Controller
 
         $testsQuery->orderByDesc('academic_year');
 
-        // Determine if we should restrict to teacher's subjects
-        $isTeacher = Auth::check() && Auth::user()->isTeacher();
+        // Teachers cannot view the result index — redirect early
+        [$isTeacher, $staff] = $this->resultService->resolveTeacherContext();
 
         if ($isTeacher) {
             return redirect()->route('dashboard')->with('error', 'Access denied. You can only enter marks for your scheduled tests.');
-        }
-
-        if ($isTeacher) {
-            $staff = Auth::user()->staff;
-            if ($staff) {
-                $testsQuery->whereIn('subject_id', function($q) use ($staff) {
-                    $q->select('subject_id')
-                      ->from('student_teacher_subjects')
-                      ->where('staff_id', $staff->id);
-                });
-            } else {
-                $testsQuery->whereRaw('1 = 0');
-            }
         }
 
         $tests = $testsQuery->paginate(20);
@@ -97,22 +88,11 @@ class ResultController extends Controller
             ->select('test_date', 'admission_year', 'subject_id')
             ->orderBy('test_date', 'desc');
 
-        // Determine if we should restrict to teacher's subjects
-        $isTeacher = Auth::check() && Auth::user()->isTeacher();
+        // Restrict to teacher's subjects if applicable
+        [$isTeacher, $staff] = $this->resultService->resolveTeacherContext();
 
-        // If teacher, show only their subjects
         if ($isTeacher) {
-            $staff = Auth::user()->staff;
-            if ($staff) {
-                $query->whereIn('subject_id', function($q) use ($staff) {
-                    $q->select('subject_id')
-                      ->from('student_teacher_subjects')
-                      ->where('staff_id', $staff->id);
-                });
-            } else {
-                // No staff record, show nothing
-                $query->whereRaw('1 = 0');
-            }
+            $this->resultService->scopeToTeacherSubjects($query, $staff);
         }
 
         $testDates = $query->get()
@@ -141,21 +121,11 @@ class ResultController extends Controller
         $query = \App\Models\Datesheet::with(['subject'])
             ->whereDate('test_date', $request->test_date);
 
-        // Determine if we should restrict to teacher's subjects
-        $isTeacher = Auth::check() && Auth::user()->isTeacher();
+        // Restrict to teacher's subjects if applicable
+        [$isTeacher, $staff] = $this->resultService->resolveTeacherContext();
 
-        // If teacher, show only their subjects
         if ($isTeacher) {
-            $staff = Auth::user()->staff;
-            if ($staff) {
-                $query->whereIn('subject_id', function($q) use ($staff) {
-                    $q->select('subject_id')
-                      ->from('student_teacher_subjects')
-                      ->where('staff_id', $staff->id);
-                });
-            } else {
-                $query->whereRaw('1 = 0');
-            }
+            $this->resultService->scopeToTeacherSubjects($query, $staff);
         }
 
         $tests = $query->get()
@@ -225,21 +195,11 @@ class ResultController extends Controller
         
         $subject = Subject::findOrFail($subjectId);
 
-        // Determine if we should restrict to teacher's students
-        $isTeacher = Auth::check() && Auth::user()->isTeacher();
+        // Resolve teacher context for scope restriction
+        [$isTeacher, $staff] = $this->resultService->resolveTeacherContext();
 
-        // Teacher Restriction Check
-        if ($isTeacher) {
-            $staff = Auth::user()->staff;
-            if (!$staff) {
-                return response()->json(['error' => 'Teacher record not found.'], 403);
-            }
-
-            // Verify teacher is assigned to this subject (via specialization or direct assignment check could be added here if needed, 
-            // but for now we will rely on the student assignment check below which is more strict)
-            
-            // Actually, we should check if the teacher teaches this subject to ANY student or is specialized.
-            // But the requirement is "add only his subject result for only his students".
+        if ($isTeacher && !$staff) {
+            return response()->json(['error' => 'Teacher record not found.'], 403);
         }
         
         $studentsQuery = Student::with(['admissions', 'father'])
@@ -248,12 +208,7 @@ class ResultController extends Controller
             ->select('students.*', 'admissions.college_roll_no');
 
         if ($isTeacher) {
-            $staff = Auth::user()->staff;
-            // Filter students assigned to this teacher for this subject
-            $studentsQuery->whereHas('studentTeacherSubjects', function($q) use ($staff, $subjectId) {
-                $q->where('staff_id', $staff->id)
-                  ->where('subject_id', $subjectId);
-            });
+            $this->resultService->scopeStudentsToTeacher($studentsQuery, $staff, $subjectId);
         }
 
         if ($subject->type === 'Elective') {
@@ -499,12 +454,9 @@ class ResultController extends Controller
 
         $admissionYears = Admissions::distinctAdmissionYears();
 
-        $student = Student::with(['admissions', 'father', 'compulsorySubjects.subject', 'electives.subject'])
-            ->whereHas('admissions', function($q) use ($request) {
-                $q->where('admission_year', $request->admission_year)
-                  ->where('bise_roll_12', $request->bise_roll_12);
-            })
-            ->first();
+        $student = $this->resultService->findStudentByBiseRoll(
+            $request->admission_year, 'bise_roll_12', $request->bise_roll_12
+        );
 
         if (!$student) {
             return redirect()->route('results.final.create')
@@ -512,47 +464,7 @@ class ResultController extends Controller
                 ->withInput();
         }
 
-        // Merge subjects
-        $compulsory = $student->compulsorySubjects->map(function($item) {
-            return $item->subject;
-        });
-        $electives = $student->electives->map(function($item) {
-            return $item->subject;
-        });
-        
-        $allSubjects = $compulsory->merge($electives);
-
-        // Custom sort order
-        $prioritySubjects = [
-            'Translation Of Holy Quran',
-            'Urdu',
-            'English',
-            'Islamic Education',
-            'Pakistan Studies'
-        ];
-
-        $subjects = $allSubjects->sort(function($a, $b) use ($prioritySubjects) {
-            $posA = array_search($a->name, $prioritySubjects);
-            $posB = array_search($b->name, $prioritySubjects);
-
-            // If both are in priority list, sort by their position in that list
-            if ($posA !== false && $posB !== false) {
-                return $posA - $posB;
-            }
-
-            // If A is in priority list, it comes first
-            if ($posA !== false) {
-                return -1;
-            }
-
-            // If B is in priority list, it comes first
-            if ($posB !== false) {
-                return 1;
-            }
-
-            // Otherwise, sort by subject code descending
-            return strcmp($b->code, $a->code);
-        });
+        $subjects = $this->resultService->getMergedSubjects($student);
 
         // Fetch existing final results
         $results = Result::where('student_id', $student->id)
@@ -589,28 +501,12 @@ class ResultController extends Controller
                 if (isset($classData[11])) {
                     $data11 = $classData[11];
                     $isAbsent11 = isset($data11['is_absent']) && $data11['is_absent'];
-                    // If absent, mark as 0. If theory is set, use it.
                     $theory11 = $isAbsent11 ? 0 : ($data11['theory'] ?? null);
                     
-                    // Only save if we have data (theory entered or marked absent)
                     if ($theory11 !== null || $isAbsent11) {
-                         Result::updateOrCreate(
-                            [
-                                'student_id' => $student->id,
-                                'subject_id' => $subjectId,
-                                'class_level' => '11',
-                                'exam_type' => 'Final',
-                                'exam_name' => 'Final',
-                                'academic_year' => $request->admission_year, 
-                            ],
-                            [
-                                'total_marks' => $subject->total_11,
-                                'obtained_theory' => $theory11,
-                                'obtained_practical' => null,
-                                'is_absent' => $isAbsent11,
-                                'created_by' => Auth::id(),
-                                'updated_by' => Auth::id(),
-                            ]
+                        $this->resultService->upsertFinalResult(
+                            $student->id, $subjectId, '11', $request->admission_year,
+                            $subject->total_11, $theory11, null, $isAbsent11
                         );
                     }
                 }
@@ -627,23 +523,10 @@ class ResultController extends Controller
                     $hasPractical = $practical12 !== null || isset($data12['practical_absent']);
 
                     if ($hasTheory || $hasPractical) {
-                        Result::updateOrCreate(
-                            [
-                                'student_id' => $student->id,
-                                'subject_id' => $subjectId,
-                                'class_level' => '12',
-                                'exam_type' => 'Final',
-                                'exam_name' => 'Final',
-                                'academic_year' => $request->admission_year + 1,
-                            ],
-                            [
-                                'total_marks' => ($subject->theory_12 ?? 0) + ($subject->practical_12 ?? 0),
-                                'obtained_theory' => $theory12,
-                                'obtained_practical' => $practical12,
-                                'is_absent' => $isAbsent12,
-                                'created_by' => Auth::id(),
-                                'updated_by' => Auth::id(),
-                            ]
+                        $this->resultService->upsertFinalResult(
+                            $student->id, $subjectId, '12', $request->admission_year + 1,
+                            ($subject->theory_12 ?? 0) + ($subject->practical_12 ?? 0),
+                            $theory12, $practical12, $isAbsent12
                         );
                     }
                 }
@@ -681,12 +564,9 @@ class ResultController extends Controller
 
         $admissionYears = Admissions::distinctAdmissionYears();
 
-        $student = Student::with(['admissions', 'father', 'compulsorySubjects.subject', 'electives.subject'])
-            ->whereHas('admissions', function($q) use ($request) {
-                $q->where('admission_year', $request->admission_year)
-                  ->where('bise_roll_11', $request->bise_roll_11);
-            })
-            ->first();
+        $student = $this->resultService->findStudentByBiseRoll(
+            $request->admission_year, 'bise_roll_11', $request->bise_roll_11
+        );
 
         if (!$student) {
             return redirect()->route('results.11th.create')
@@ -694,47 +574,7 @@ class ResultController extends Controller
                 ->withInput();
         }
 
-        // Merge subjects
-        $compulsory = $student->compulsorySubjects->map(function($item) {
-            return $item->subject;
-        });
-        $electives = $student->electives->map(function($item) {
-            return $item->subject;
-        });
-        
-        $allSubjects = $compulsory->merge($electives);
-
-        // Custom sort order
-        $prioritySubjects = [
-            'Translation Of Holy Quran',
-            'Urdu',
-            'English',
-            'Islamic Education',
-            'Pakistan Studies'
-        ];
-
-        $subjects = $allSubjects->sort(function($a, $b) use ($prioritySubjects) {
-            $posA = array_search($a->name, $prioritySubjects);
-            $posB = array_search($b->name, $prioritySubjects);
-
-            // If both are in priority list, sort by their position in that list
-            if ($posA !== false && $posB !== false) {
-                return $posA - $posB;
-            }
-
-            // If A is in priority list, it comes first
-            if ($posA !== false) {
-                return -1;
-            }
-
-            // If B is in priority list, it comes first
-            if ($posB !== false) {
-                return 1;
-            }
-
-            // Otherwise, sort by subject code descending
-            return strcmp($b->code, $a->code);
-        });
+        $subjects = $this->resultService->getMergedSubjects($student);
 
         // Fetch existing 11th final results
         $results = Result::where('student_id', $student->id)
@@ -771,27 +611,12 @@ class ResultController extends Controller
                 // Class 11 Only
                 if (isset($classData[11])) {
                     $data11 = $classData[11];
-                    // If absent, mark as 0. If theory is set, use it.
                     $theory11 = isset($data11['is_absent']) ? 0 : ($data11['theory'] ?? null);
                     
-                    // Only save if we have data (theory entered or marked absent)
                     if ($theory11 !== null || isset($data11['is_absent'])) {
-                         Result::updateOrCreate(
-                            [
-                                'student_id' => $student->id,
-                                'subject_id' => $subjectId,
-                                'class_level' => '11',
-                                'exam_type' => 'Final',
-                                'exam_name' => 'Final',
-                                'academic_year' => $request->admission_year, 
-                            ],
-                            [
-                                'total_marks' => $subject->total_11,
-                                'obtained_theory' => $theory11,
-                                'obtained_practical' => null,
-                                'created_by' => Auth::id(),
-                                'updated_by' => Auth::id(),
-                            ]
+                        $this->resultService->upsertFinalResult(
+                            $student->id, $subjectId, '11', $request->admission_year,
+                            $subject->total_11, $theory11, null, isset($data11['is_absent'])
                         );
                     }
                 }
@@ -823,13 +648,11 @@ class ResultController extends Controller
         if ($request->filled('admission_year')) {
             $year = $request->admission_year;
 
-            // Determine if we should restrict to teacher's subjects
-            $isTeacher = Auth::check() && Auth::user()->isTeacher();
+            [$isTeacher, $staff] = $this->resultService->resolveTeacherContext();
 
             // 1. Calculate Stats for this Admission Year
             $totalQuery = Admissions::where('admission_year', $year);
-            if ($isTeacher && Auth::user()->staff) {
-                $staff = Auth::user()->staff;
+            if ($isTeacher && $staff) {
                 $totalQuery->whereHas('student.studentTeacherSubjects', function($q) use ($staff) {
                     $q->where('staff_id', $staff->id);
                 });
@@ -843,7 +666,6 @@ class ResultController extends Controller
                 });
 
             if ($isTeacher) {
-                $staff = Auth::user()->staff;
                 if ($staff) {
                     $enteredQuery->whereIn('subject_id', function($q) use ($staff) {
                         $q->select('subject_id')
@@ -884,7 +706,6 @@ class ResultController extends Controller
             // type 'total' has no extra filter
 
             if ($isTeacher) {
-                $staff = Auth::user()->staff;
                 if ($staff) {
                     $query->whereHas('studentTeacherSubjects', function($q) use ($staff) {
                         $q->where('staff_id', $staff->id);
