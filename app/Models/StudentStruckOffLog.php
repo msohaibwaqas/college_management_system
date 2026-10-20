@@ -101,4 +101,23 @@ class StudentStruckOffLog extends Model
     {
         return $this->status === 'readmitted';
     }
+
+    /**
+     * Get the number of times this student has been readmitted in the log's academic year.
+     */
+    public function getReadmissionsCountForYear(): int
+    {
+        return static::where('student_id', $this->student_id)
+            ->where('academic_year', $this->academic_year)
+            ->where('status', 'readmitted')
+            ->count();
+    }
+
+    /**
+     * Check if this log entry can be readmitted according to max allowed limit.
+     */
+    public function canBeReadmitted(int $maxAllowed): bool
+    {
+        return $this->isStruckOff() && ($this->getReadmissionsCountForYear() < $maxAllowed);
+    }
 }

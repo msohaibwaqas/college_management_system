@@ -5,8 +5,7 @@
 <div class="container-fluid">
     @php
         $authUser = Auth::user();
-        $activeRole = session('active_role');
-        $canManagePolicy = ($authUser && $authUser->is_super_admin) || in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'super_admin']) || ($authUser && $authUser->hasAnyRole(['admin', 'principal', 'super_admin']));
+        $canManagePolicy = $authUser && $authUser->isAdministrativeStaff();
     @endphp
 
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
@@ -243,14 +242,11 @@
                                         @if($canManagePolicy)
                                             {{-- Readmit Button --}}
                                             @php
-                                                $readmissionsThisYear = \App\Models\StudentStruckOffLog::where('student_id', $log->student_id)
-                                                    ->where('academic_year', $log->academic_year)
-                                                    ->where('status', 'readmitted')
-                                                    ->count();
                                                 $maxReadmit = $settings->max_readmissions_per_year;
+                                                $readmissionsThisYear = $log->getReadmissionsCountForYear();
                                             @endphp
 
-                                            @if($readmissionsThisYear >= $maxReadmit)
+                                            @if(!$log->canBeReadmitted($maxReadmit))
                                                 <span class="badge bg-secondary" title="Max readmissions reached for this year">
                                                     <i class="fas fa-lock me-1"></i>Limit Reached ({{ $readmissionsThisYear }}/{{ $maxReadmit }})
                                                 </span>

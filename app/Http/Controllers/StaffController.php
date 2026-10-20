@@ -12,9 +12,17 @@ use App\Models\StaffSubjectSpecialization;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use App\Services\FileUploadService;
 
 class StaffController extends Controller
 {
+    protected FileUploadService $fileUploadService;
+
+    public function __construct(FileUploadService $fileUploadService)
+    {
+        $this->fileUploadService = $fileUploadService;
+    }
+
     /**
      * Display a listing of staff
      */
@@ -128,7 +136,7 @@ class StaffController extends Controller
             ];
 
             if ($request->hasFile('picture')) {
-                $staffData['picture'] = $request->file('picture')->store('staff_pictures', 'public');
+                $staffData['picture'] = $this->fileUploadService->upload($request->file('picture'), 'staff_pictures');
             }
 
             $staff = Staff::create($staffData);
@@ -258,14 +266,11 @@ class StaffController extends Controller
 
             // Handle picture upload
             if ($request->hasFile('picture')) {
-                // Delete old picture if exists
-                if ($staff->picture && \Storage::disk('public')->exists($staff->picture)) {
-                    \Storage::disk('public')->delete($staff->picture);
-                }
-
-                // Store new picture
-                $path = $request->file('picture')->store('staff_pictures', 'public');
-                $updateData['picture'] = $path;
+                $updateData['picture'] = $this->fileUploadService->update(
+                    $request->file('picture'),
+                    $staff->picture,
+                    'staff_pictures'
+                );
             }
 
             $staff->update($updateData);
@@ -351,6 +356,9 @@ class StaffController extends Controller
      */
     public function destroy(Staff $staff)
     {
+        if ($staff->picture) {
+            $this->fileUploadService->delete($staff->picture);
+        }
         $staff->delete();
         return redirect()->route('staff.index')->with('success', 'Staff member deleted successfully!');
     }

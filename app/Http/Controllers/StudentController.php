@@ -20,9 +20,17 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use App\Services\FileUploadService;
 
 class StudentController extends Controller
 {
+    protected FileUploadService $fileUploadService;
+
+    public function __construct(FileUploadService $fileUploadService)
+    {
+        $this->fileUploadService = $fileUploadService;
+    }
+
     /**
      * List all students
      */
@@ -41,17 +49,8 @@ class StudentController extends Controller
         ]);
 
         // Determine if we should restrict to teacher's students
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
+
 
         // If user is a teacher, show only assigned students
         if ($isTeacher) {
@@ -209,7 +208,7 @@ class StudentController extends Controller
                 // Handle picture upload
                 $picturePath = null;
                 if ($request->hasFile('picture')) {
-                    $picturePath = $request->file('picture')->store('student_pictures', 'public');
+                    $picturePath = $this->fileUploadService->upload($request->file('picture'), 'student_pictures');
                 }
 
                 // 1. Student
@@ -370,20 +369,7 @@ class StudentController extends Controller
     public function edit(Request $request, Student $student)
     {
         $redirectTo = $request->get('redirect_to', url()->previous());
-        // Determine if we should restrict
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
-
-        if ($isTeacher) {
+        if (Auth::user()?->isTeacher()) {
             return redirect()->route('students.index')->with('error', 'Access denied.');
         }
 
@@ -477,19 +463,7 @@ class StudentController extends Controller
     public function update(Request $request, Student $student)
     {
         // Determine if we should restrict
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
-
-        if ($isTeacher) {
+        if (Auth::user()?->isTeacher()) {
             return redirect()->route('students.index')->with('error', 'Access denied.');
         }
 
@@ -600,12 +574,11 @@ class StudentController extends Controller
             // Handle picture upload
             $picturePath = null;
             if ($request->hasFile('picture')) {
-                // Delete old picture if exists
-                if ($student->picture && \Illuminate\Support\Facades\Storage::disk('public')->exists($student->picture)) {
-                    \Illuminate\Support\Facades\Storage::disk('public')->delete($student->picture);
-                }
-                
-                $picturePath = $request->file('picture')->store('student_pictures', 'public');
+                $picturePath = $this->fileUploadService->update(
+                    $request->file('picture'),
+                    $student->picture,
+                    'student_pictures'
+                );
             }
 
             // 1. Update Student
@@ -906,6 +879,9 @@ class StudentController extends Controller
     {
         $student = Student::onlyTrashed()->findOrFail($id);
         
+        if ($student->picture) {
+            $this->fileUploadService->delete($student->picture);
+        }
         $student->forceDelete();
         
         return redirect()->route('students.trash')->with('success', 'Student permanently deleted!');

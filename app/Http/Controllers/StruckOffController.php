@@ -297,10 +297,7 @@ class StruckOffController extends Controller
     {
         $settings   = StruckOffSetting::getSettings();
         $user       = Auth::user();
-        $activeRole = session('active_role');
-
-        // Check if user is operating under the teacher role
-        $isTeacher = ($activeRole === 'teacher') || (!$user->is_super_admin && !$user->hasAnyRole(['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'super_admin']));
+        $isTeacher  = $user->isTeacher();
 
         $query = StudentStruckOffLog::with([
                 'student',

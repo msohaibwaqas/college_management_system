@@ -431,7 +431,7 @@ class User extends Authenticatable
         return $role ? $role->permissions->pluck('name')->toArray() : [];
     }
 
-    public function canAccessResource(string $resource, string $action = null): bool
+    public function canAccessResource(string $resource, ?string $action = null): bool
     {
         if ($this->is_super_admin) {
             return true;
@@ -442,6 +442,53 @@ class User extends Authenticatable
         }
         
         return $this->hasPermission($resource);
+    }
+
+    /**
+     * Get currently active role from session or default priority
+     */
+    public function getActiveRole(): ?string
+    {
+        $activeRole = session('active_role');
+        if ($activeRole) {
+            return $activeRole;
+        }
+
+        if ($this->is_super_admin) {
+            return 'super_admin';
+        }
+
+        return $this->roles->first()?->name;
+    }
+
+    /**
+     * Check if user is operating with administrative privileges
+     */
+    public function isAdministrativeStaff(): bool
+    {
+        $activeRole = $this->getActiveRole();
+        if ($activeRole) {
+            $adminRoles = ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'super_admin', 'bs_admin', 'bs_clerk'];
+            return in_array($activeRole, $adminRoles);
+        }
+
+        return (bool) $this->is_super_admin;
+    }
+
+    /**
+     * Check if user is currently operating in teacher role
+     */
+    public function isTeacher(): bool
+    {
+        return $this->getActiveRole() === 'teacher';
+    }
+
+    /**
+     * Check if user is currently operating in student role
+     */
+    public function isStudent(): bool
+    {
+        return $this->getActiveRole() === 'student';
     }
 
     public function updateLastLogin(): void
