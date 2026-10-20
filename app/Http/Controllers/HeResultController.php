@@ -67,8 +67,8 @@ class HeResultController extends Controller
     public function create(Request $request)
     {
         $user = Auth::user();
-        $isAdmin = $user->hasAnyRole(['admin', 'principal', 'clerk', 'bs_clerk', 'bs_admin']);
-        $isTeacher = $user->hasRole('teacher') && !$isAdmin;
+        $isAdmin = $user->isAdministrativeStaff();
+        $isTeacher = $user->isTeacher();
         $staff = $user->staff;
 
         if ($isTeacher && !$staff) {
@@ -123,8 +123,8 @@ class HeResultController extends Controller
         $subject = BsSubject::findOrFail($subjectId);
 
         $user = Auth::user();
-        $isAdmin = $user->hasAnyRole(['admin', 'principal', 'clerk', 'bs_clerk', 'bs_admin']);
-        $isTeacher = $user->hasRole('teacher') && !$isAdmin;
+        $isAdmin = $user->isAdministrativeStaff();
+        $isTeacher = $user->isTeacher();
         $staff = $user->staff;
 
         // Security check for teachers
@@ -203,8 +203,8 @@ class HeResultController extends Controller
         ]);
 
         $user = Auth::user();
-        $isAdmin = $user->hasAnyRole(['admin', 'principal', 'clerk', 'bs_clerk', 'bs_admin']);
-        $isTeacher = $user->hasRole('teacher') && !$isAdmin;
+        $isAdmin = $user->isAdministrativeStaff();
+        $isTeacher = $user->isTeacher();
 
         if ($isTeacher && $request->exam_type === 'Final') {
             return response()->json(['success' => false, 'message' => 'Teachers can only enter Mid and Sessional marks.'], 403);
@@ -381,8 +381,8 @@ class HeResultController extends Controller
         ]);
 
         $user = Auth::user();
-        $isAdmin = $user->hasAnyRole(['admin', 'principal', 'clerk', 'bs_clerk', 'bs_admin']);
-        $isTeacher = $user->hasRole('teacher') && !$isAdmin;
+        $isAdmin = $user->isAdministrativeStaff();
+        $isTeacher = $user->isTeacher();
         $staff = $user->staff;
 
         $subjectsQuery = Semester::where('program_id', $request->program_id)

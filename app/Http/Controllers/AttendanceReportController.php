@@ -18,7 +18,7 @@ class AttendanceReportController extends Controller
     public function index()
     {
         $user = auth()->user();
-        $isTeacher = $user->hasRole('teacher') && !$user->is_super_admin && !$user->hasRole('admin');
+        $isTeacher = $user->isTeacher();
         $staffId = $isTeacher ? ($user->staff->id ?? null) : null;
 
         if ($isTeacher) {
@@ -67,7 +67,7 @@ class AttendanceReportController extends Controller
         $endDate = $request->end_date;
 
         $user = auth()->user();
-        $isTeacher = $user->hasRole('teacher') && !$user->is_super_admin && !$user->hasRole('admin');
+        $isTeacher = $user->isTeacher();
         $staffId = $isTeacher ? ($user->staff->id ?? null) : null;
 
         // Get students enrolled in this subject and class

@@ -31,17 +31,7 @@ class TestAttendanceController extends Controller
         // If the user is a teacher, they should strictly see their own subjects?
         // Assuming yes for consistency.
         
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
         if ($isTeacher) {
             $staff = Auth::user()->staff;
@@ -90,17 +80,7 @@ class TestAttendanceController extends Controller
         $subject = Subject::findOrFail($subjectId);
 
         // Determine teacher restriction
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
         $studentsQuery = Student::with(['admissions', 'father'])
             ->join('admissions', 'students.id', '=', 'admissions.student_id')
@@ -196,17 +176,7 @@ class TestAttendanceController extends Controller
         $subject = Subject::find($subjectId); // Assuming valid as per validation
 
         // Teacher restriction check (same as fetchStudents)
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
         $studentsQuery = Student::join('admissions', 'students.id', '=', 'admissions.student_id')
             ->where('admissions.admission_year', $year)

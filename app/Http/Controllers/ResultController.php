@@ -58,18 +58,7 @@ class ResultController extends Controller
         $testsQuery->orderByDesc('academic_year');
 
         // Determine if we should restrict to teacher's subjects
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            // Fallback if no active role set: strict teacher check (is teacher AND NOT admin/principal/clerk)
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
         if ($isTeacher) {
             return redirect()->route('dashboard')->with('error', 'Access denied. You can only enter marks for your scheduled tests.');
@@ -112,17 +101,7 @@ class ResultController extends Controller
             ->orderBy('test_date', 'desc');
 
         // Determine if we should restrict to teacher's subjects
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
         // If teacher, show only their subjects
         if ($isTeacher) {
@@ -166,17 +145,7 @@ class ResultController extends Controller
             ->whereDate('test_date', $request->test_date);
 
         // Determine if we should restrict to teacher's subjects
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
         // If teacher, show only their subjects
         if ($isTeacher) {
@@ -260,17 +229,7 @@ class ResultController extends Controller
         $subject = Subject::findOrFail($subjectId);
 
         // Determine if we should restrict to teacher's students
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
         // Teacher Restriction Check
         if ($isTeacher) {
@@ -522,20 +481,7 @@ class ResultController extends Controller
      */
     public function createFinalResult()
     {
-        // Determine if we should restrict
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
-
-        if ($isTeacher) {
+        if (Auth::user()?->isTeacher()) {
             return redirect()->route('dashboard')->with('error', 'Access denied.');
         }
 
@@ -637,20 +583,7 @@ class ResultController extends Controller
             'marks' => 'required|array',
         ]);
 
-        // Determine if we should restrict
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
-
-        if ($isTeacher) {
+        if (Auth::user()?->isTeacher()) {
             return redirect()->back()->with('error', 'Teachers are not authorized to enter final results.');
         }
 
@@ -736,20 +669,7 @@ class ResultController extends Controller
      */
     public function create11thResult()
     {
-        // Determine if we should restrict
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
-
-        if ($isTeacher) {
+        if (Auth::user()?->isTeacher()) {
             return redirect()->route('dashboard')->with('error', 'Access denied.');
         }
 
@@ -852,20 +772,7 @@ class ResultController extends Controller
             'marks' => 'required|array',
         ]);
 
-        // Determine if we should restrict
-        $isTeacher = false;
-        $activeRole = session('active_role');
-        if ($activeRole) {
-            $isTeacher = ($activeRole === 'teacher');
-        } else {
-            $isTeacher = Auth::user()->hasRole('teacher') && 
-                        !Auth::user()->hasRole('admin') && 
-                        !Auth::user()->hasRole('principal') && 
-                        !Auth::user()->hasRole('clerk') &&
-                        !Auth::user()->is_super_admin;
-        }
-
-        if ($isTeacher) {
+        if (Auth::user()?->isTeacher()) {
             return redirect()->back()->with('error', 'Teachers are not authorized to enter final results.');
         }
 
@@ -935,17 +842,7 @@ class ResultController extends Controller
             $year = $request->admission_year;
 
             // Determine if we should restrict to teacher's subjects
-            $isTeacher = false;
-            $activeRole = session('active_role');
-            if ($activeRole) {
-                $isTeacher = ($activeRole === 'teacher');
-            } else {
-                $isTeacher = Auth::user()->hasRole('teacher') && 
-                            !Auth::user()->hasRole('admin') && 
-                            !Auth::user()->hasRole('principal') && 
-                            !Auth::user()->hasRole('clerk') &&
-                            !Auth::user()->is_super_admin;
-            }
+            $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
             // 1. Calculate Stats for this Admission Year
             $totalQuery = Admissions::where('admission_year', $year);
