@@ -120,4 +120,17 @@ class StudentStruckOffLog extends Model
     {
         return $this->isStruckOff() && ($this->getReadmissionsCountForYear() < $maxAllowed);
     }
+
+    /**
+     * Mark this struck-off log entry as readmitted.
+     */
+    public function markReadmitted(int $userId, ?string $note = null): void
+    {
+        $this->update([
+            'status'           => 'readmitted',
+            'readmitted_by'    => $userId,
+            'readmitted_at'    => now(),
+            'readmission_note' => $note,
+        ]);
+    }
 }

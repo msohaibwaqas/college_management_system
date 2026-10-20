@@ -107,20 +107,7 @@ class FeeVoucher extends Model
             return (string)$this->application->subject_group;
         }
         if ($this->student) {
-            // Determine from electives
-            $subjects = $this->student->electives->pluck('subject.name')->toArray();
-            if (empty($subjects)) return 'N/A';
-            
-            $hasPhy = in_array('Physics', $subjects);
-            $hasChem = in_array('Chemistry', $subjects);
-            $hasBio = in_array('Biology', $subjects);
-            $hasComp = in_array('Computer Science', $subjects);
-            $hasMath = in_array('Mathematics', $subjects);
-
-            if ($hasPhy && $hasChem && $hasBio) return 'Pre-Medical';
-            if ($hasPhy && $hasMath && $hasChem) return 'Pre-Engineering';
-            if ($hasPhy && $hasMath && $hasComp) return 'ICS';
-            return 'General/Humanities';
+            return $this->student->subject_group;
         }
         return 'N/A';
     }
@@ -207,5 +194,18 @@ class FeeVoucher extends Model
     public function onlineTransactions()
     {
         return $this->hasMany(OnlineTransaction::class, 'fee_voucher_id');
+    }
+
+    /**
+     * Confirm voucher payment.
+     */
+    public function confirmPayment(float $paidAmount, ?string $paymentDate = null, ?int $confirmedBy = null): void
+    {
+        $this->update([
+            'paid_amount'  => $paidAmount,
+            'payment_date' => $paymentDate ?? now()->toDateString(),
+            'status'       => 'paid',
+            'confirmed_by' => $confirmedBy ?? auth()->id(),
+        ]);
     }
 }

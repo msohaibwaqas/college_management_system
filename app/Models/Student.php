@@ -195,30 +195,83 @@ class Student extends Model
 
     public function scopeActive(Builder $query): Builder
     {
-        return $query->join('admissions', 'students.id', '=', 'admissions.student_id')
-                    ->where('admissions.status', 'Active')
-                    ->select('students.*');
+        return $query->whereHas('admissions', function ($q) {
+            $q->active();
+        });
+    }
+
+    public function scopeStruckOff(Builder $query): Builder
+    {
+        return $query->whereHas('admissions', function ($q) {
+            $q->struckOff();
+        });
+    }
+
+    public function scopeInBatch(Builder $query, int $admissionYear): Builder
+    {
+        return $query->whereHas('admissions', function ($q) use ($admissionYear) {
+            $q->where('admission_year', $admissionYear);
+        });
+    }
+
+    public function scopeInClass(Builder $query, string $class): Builder
+    {
+        return $query->whereHas('admissions', function ($q) use ($class) {
+            $q->where('current_class', $class);
+        });
+    }
+
+    public function scopeWhereNotGraduated(Builder $query): Builder
+    {
+        return $query->whereHas('admissions', function ($q) {
+            $q->notGraduated();
+        });
+    }
+
+    public function scopeAssignedToTeacher(Builder $query, ?int $staffId, ?int $subjectId = null): Builder
+    {
+        if (!$staffId) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereHas('studentTeacherSubjects', function ($q) use ($staffId, $subjectId) {
+            $q->where('staff_id', $staffId);
+            if ($subjectId) {
+                $q->where('subject_id', $subjectId);
+            }
+        });
+    }
+
+    public function scopeSearch(Builder $query, string $search): Builder
+    {
+        return $query->where(function ($q) use ($search) {
+            $q->where('first_name', 'like', "%{$search}%")
+              ->orWhere('last_name', 'like', "%{$search}%")
+              ->orWhereHas('admissions', function ($subQ) use ($search) {
+                  $subQ->where('college_roll_no', 'like', "%{$search}%")
+                       ->orWhere('bise_roll_11', 'like', "%{$search}%")
+                       ->orWhere('bise_roll_12', 'like', "%{$search}%");
+              });
+        });
     }
 
     public function scopeForClass(Builder $query, string $class): Builder
     {
-        return $query->join('admissions', 'students.id', '=', 'admissions.student_id')
-                    ->where('admissions.current_class', $class)
-                    ->select('students.*');
+        return $query->inClass($class);
     }
 
     public function scopeForYear(Builder $query, int $year): Builder
     {
-        return $query->join('admissions', 'students.id', '=', 'admissions.student_id')
-                    ->where('admissions.academic_year', $year)
-                    ->select('students.*');
+        return $query->whereHas('admissions', function ($q) use ($year) {
+            $q->where('academic_year', $year);
+        });
     }
 
     public function scopeWithCnic(Builder $query): Builder
     {
-        return $query->join('student_attributes', 'students.id', '=', 'student_attributes.student_id')
-                    ->whereNotNull('student_attributes.student_cnic')
-                    ->select('students.*');
+        return $query->whereHas('attribute', function ($q) {
+            $q->whereNotNull('student_cnic');
+        });
     }
 
     // Accessors
@@ -426,5 +479,80 @@ class Student extends Model
             return asset($this->picture);
         }
         return asset('uploads/default.jpg');
+    }
+
+    /**
+     * Classify an array of elective subject names into a recognized academic group.
+     */
+    public static function classifySubjectGroup(array $subjects): string
+    {
+        $subs = array_map('strtolower', $subjects);
+        $has = fn($sub) => in_array(true, array_map(fn($s) => strpos($s, strtolower($sub)) !== false, $subs));
+
+        if ($has('biology') && $has('physics') && $has('chemistry')) return 'Pre-Medical';
+        if ($has('math') && $has('physics') && $has('chemistry')) return 'Pre-Engineering';
+        if ($has('math') && $has('computer')) return 'ICS';
+        if ($has('computer')) return 'FA-IT';
+        return 'FA';
+    }
+
+    /**
+     * Get the student's academic group based on their enrolled elective subjects.
+     */
+    public function getSubjectGroupAttribute(): string
+    {
+        $subjectNames = $this->electives->pluck('subject.name')->filter()->toArray();
+        return !empty($subjectNames) ? static::classifySubjectGroup($subjectNames) : 'N/A';
+    }
+
+    /**
+     * Check if the student has a pending subject change fee difference voucher.
+     */
+    public function hasPendingSubjectChangeVoucher(): bool
+    {
+        return $this->vouchers()
+            ->where('status', 'pending')
+            ->where('remarks', 'Subject Change Fee Difference')
+            ->exists();
+    }
+
+    /**
+     * Check if elective subjects can be modified for this student.
+     */
+    public function canChangeElectives(): bool
+    {
+        $latestAdmission = $this->admissions()->latest('admission_year')->first();
+        if ($latestAdmission && $latestAdmission->current_class === '12') {
+            return false;
+        }
+
+        return !$this->hasPendingSubjectChangeVoucher();
+    }
+
+    /**
+     * Update elective subjects and synchronize orphaned teacher assignments.
+     */
+    public function updateElectives(array $subjectIds, ?int $userId = null): void
+    {
+        \Illuminate\Support\Facades\DB::transaction(function () use ($subjectIds, $userId) {
+            // Delete existing electives
+            $this->electives()->forceDelete();
+
+            // Insert new ones with sequence
+            foreach ($subjectIds as $sequence => $subjectId) {
+                StudentElectiveSubject::create([
+                    'student_id' => $this->id,
+                    'subject_id' => $subjectId,
+                    'sequence'   => $sequence + 1,
+                    'created_by' => $userId,
+                ]);
+            }
+
+            // Sync with Teacher Assignment
+            $validSubjectIds = $this->compulsorySubjects()->pluck('subject_id')->merge($subjectIds)->unique();
+            $this->studentTeacherSubjects()
+                ->whereNotIn('subject_id', $validSubjectIds)
+                ->delete();
+        });
     }
 }

@@ -55,46 +55,25 @@ class StudentController extends Controller
         // Determine if we should restrict to teacher's students
         $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
-
         // If user is a teacher, show only assigned students
         if ($isTeacher) {
             $staff = Auth::user()->staff;
-            if ($staff) {
-                $query->whereHas('studentTeacherSubjects', function($q) use ($staff) {
-                    $q->where('staff_id', $staff->id);
-                });
-            } else {
-                // If no staff record, show no students
-                $query->whereRaw('1 = 0');
-            }
+            $query->assignedToTeacher($staff?->id);
         }
 
         // Filter by admission year
         if ($request->filled('admission_year')) {
-            $query->whereHas('admissions', function($q) use ($request) {
-                $q->where('admission_year', $request->admission_year);
-            });
+            $query->inBatch((int) $request->admission_year);
         }
 
         // Hide graduated students by default
         if (!$request->filled('show_graduated') || $request->show_graduated != '1') {
-            $query->whereHas('admissions', function($q) {
-                $q->where('status', '!=', 'Graduated');
-            });
+            $query->whereNotGraduated();
         }
 
         // Search by name or roll number
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhereHas('admissions', function($subQ) use ($search) {
-                      $subQ->where('college_roll_no', 'like', "%{$search}%")
-                           ->orWhere('bise_roll_11', 'like', "%{$search}%")
-                           ->orWhere('bise_roll_12', 'like', "%{$search}%");
-                  });
-            });
+            $query->search($request->search);
         }
 
         // Sorting
@@ -123,11 +102,7 @@ class StudentController extends Controller
         $students = $query->paginate($perPage)->appends($request->except('page'));
 
         // Get unique admission years for filter
-        $admissionYears = DB::table('admissions')
-            ->select('admission_year')
-            ->distinct()
-            ->orderBy('admission_year', 'desc')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
 
         return view('students.index', compact('students', 'admissionYears'));
     }
@@ -505,23 +480,13 @@ class StudentController extends Controller
             // Find Class 11 admissions for these students
             $admissions = Admissions::whereIn('student_id', $studentIds)
                 ->where('current_class', '11')
-                ->whereIn('status', ['Admitted', 'Active'])
+                ->whereIn('status', ['Admitted', 'Active', 'admitted', 'active'])
                 ->get();
 
             foreach ($admissions as $admission) {
-                // Update admission record
-                $admission->update([
-                    'current_class' => '12',
-                    'academic_year' => $admission->academic_year + 1
-                ]);
-
-                // Update subject levels
-                DB::table('student_compulsory_subjects')
-                    ->where('student_id', $admission->student_id)
-                    ->where('class_level', '11')
-                    ->update(['class_level' => '12']);
-
-                $promotedCount++;
+                if ($admission->promoteToClass12()) {
+                    $promotedCount++;
+                }
             }
 
             DB::commit();
@@ -701,31 +666,18 @@ class StudentController extends Controller
 
         if ($selectedYear) {
             $students = Student::with(['electives.subject', 'admissions', 'father'])
-                ->whereHas('admissions', function($q) use ($selectedYear) {
-                    $q->where('admission_year', $selectedYear);
-                })
+                ->inBatch((int) $selectedYear)
                 ->get();
-
-            $classifyGroup = function($subjects) {
-                $subs = array_map('strtolower', $subjects);
-                $has = fn($sub) => in_array(true, array_map(fn($s) => strpos($s, strtolower($sub)) !== false, $subs));
-
-                if ($has('biology') && $has('physics') && $has('chemistry')) return 'Pre-Medical';
-                if ($has('math') && $has('physics') && $has('chemistry')) return 'Pre-Engineering';
-                if ($has('math') && $has('computer')) return 'ICS';
-                if ($has('computer')) return 'FA-IT';
-                return 'FA';
-            };
 
             foreach ($students as $student) {
                 $subjectNames = $student->electives->pluck('subject.name')->toArray();
                 if (count($subjectNames) > 0) {
-                    $group = $classifyGroup($subjectNames);
+                    $group = $student->subject_group;
                     $admission = $student->admissions->first();
 
                     $groups[$group][] = [
                         'roll_no' => $admission ? $admission->college_roll_no : 'N/A',
-                        'name' => $student->first_name . ' ' . $student->last_name,
+                        'name' => $student->full_name,
                         'father_name' => $student->father ? $student->father->name : 'N/A',
                         'subjects' => implode(', ', $subjectNames)
                     ];
@@ -742,38 +694,25 @@ class StudentController extends Controller
     public function exportGroupsCSV($year)
     {
         $students = Student::with(['electives.subject', 'admissions', 'father'])
-            ->whereHas('admissions', function($q) use ($year) {
-                $q->where('admission_year', $year);
-            })
+            ->inBatch((int) $year)
             ->get();
-
-        $classifyGroup = function($subjects) {
-            $subs = array_map('strtolower', $subjects);
-            $has = fn($sub) => in_array(true, array_map(fn($s) => strpos($s, strtolower($sub)) !== false, $subs));
-
-            if ($has('biology') && $has('physics') && $has('chemistry')) return 'Pre-Medical';
-            if ($has('math') && $has('physics') && $has('chemistry')) return 'Pre-Engineering';
-            if ($has('math') && $has('computer')) return 'ICS';
-            if ($has('computer')) return 'FA-IT';
-            return 'FA';
-        };
 
         $filename = "grouped_students_{$year}.csv";
         $headers = ['Content-Type' => 'text/csv', 'Content-Disposition' => "attachment; filename=$filename"];
 
-        $callback = function() use ($students, $classifyGroup) {
+        $callback = function() use ($students) {
             $output = fopen('php://output', 'w');
             fputcsv($output, ['Group', 'Roll No', 'Name', 'Father Name', 'Subjects']);
             
             foreach ($students as $student) {
                 $subjectNames = $student->electives->pluck('subject.name')->toArray();
-                $group = count($subjectNames) > 0 ? $classifyGroup($subjectNames) : 'Unknown';
+                $group = count($subjectNames) > 0 ? $student->subject_group : 'Unknown';
                 $admission = $student->admissions->first();
                 
                 fputcsv($output, [
                     $group,
                     $admission ? $admission->college_roll_no : 'N/A',
-                    $student->first_name . ' ' . $student->last_name,
+                    $student->full_name,
                     $student->father ? $student->father->name : 'N/A',
                     implode(', ', $subjectNames)
                 ]);
@@ -790,19 +729,11 @@ class StudentController extends Controller
      */
     public function changeSubjects(Student $student)
     {
-        // 1. Check for Class 12 (including graduates/dropped out)
-        $latestAdmission = $student->admissions()->latest()->first();
-        if ($latestAdmission && $latestAdmission->current_class === '12') {
-            return redirect()->route('students.show', $student)->with('error', 'Elective subjects cannot be changed for Class 12 students.');
-        }
-
-        // 2. Check for pending Subject Change fee vouchers
-        $hasPendingVoucher = $student->vouchers()
-            ->where('status', 'pending')
-            ->where('remarks', 'Subject Change Fee Difference')
-            ->exists();
-            
-        if ($hasPendingVoucher) {
+        if (!$student->canChangeElectives()) {
+            $latestAdmission = $student->admissions()->latest('admission_year')->first();
+            if ($latestAdmission && $latestAdmission->current_class === '12') {
+                return redirect()->route('students.show', $student)->with('error', 'Elective subjects cannot be changed for Class 12 students.');
+            }
             return redirect()->route('students.show', $student)->with('error', 'You cannot change subjects because there is already a pending Subject Change fee voucher that must be paid first.');
         }
 
@@ -835,19 +766,11 @@ class StudentController extends Controller
      */
     public function updateSubjects(Request $request, Student $student)
     {
-        // 1. Check for Class 12 (including graduates/dropped out)
-        $latestAdmission = $student->admissions()->latest()->first();
-        if ($latestAdmission && $latestAdmission->current_class === '12') {
-            return redirect()->route('students.show', $student)->with('error', 'Elective subjects cannot be changed for Class 12 students.');
-        }
-
-        // 2. Check for pending Subject Change fee vouchers
-        $hasPendingVoucher = $student->vouchers()
-            ->where('status', 'pending')
-            ->where('remarks', 'Subject Change Fee Difference')
-            ->exists();
-            
-        if ($hasPendingVoucher) {
+        if (!$student->canChangeElectives()) {
+            $latestAdmission = $student->admissions()->latest('admission_year')->first();
+            if ($latestAdmission && $latestAdmission->current_class === '12') {
+                return redirect()->route('students.show', $student)->with('error', 'Elective subjects cannot be changed for Class 12 students.');
+            }
             return redirect()->route('students.show', $student)->with('error', 'You cannot change subjects because there is already a pending Subject Change fee voucher that must be paid first.');
         }
 
@@ -866,14 +789,14 @@ class StudentController extends Controller
                 // Generate a difference voucher
                 $voucher = $feeService->createVoucher($student, $result['extra_items']);
                 
-                $this->performSubjectUpdate($student, $request->elective_subjects);
+                $student->updateElectives($request->elective_subjects, Auth::id());
 
                 return redirect()->route('students.show', $student)
                     ->with('success', "Subjects updated successfully. A new voucher ({$voucher->voucher_number}) for the fee difference of {$difference} has been generated.")
                     ->with('voucher_id', $voucher->id);
             } else {
                 // No difference or negative (we don't refund automatically here)
-                $this->performSubjectUpdate($student, $request->elective_subjects);
+                $student->updateElectives($request->elective_subjects, Auth::id());
 
                 return redirect()->route('students.show', $student)
                     ->with('success', 'Subjects updated successfully. No additional fees required.');
@@ -883,34 +806,6 @@ class StudentController extends Controller
             return back()->with('error', 'Subject change failed: ' . $e->getMessage());
         }
     }
-
-    /**
-     * Helper to perform subject update logic
-     */
-    private function performSubjectUpdate(Student $student, array $subjectIds)
-    {
-        \DB::transaction(function () use ($student, $subjectIds) {
-            // Delete existing electives
-            \App\Models\StudentElectiveSubject::where('student_id', $student->id)->forceDelete();
-
-            // Insert new ones
-            foreach ($subjectIds as $sequence => $subjectId) {
-                \App\Models\StudentElectiveSubject::create([
-                    'student_id' => $student->id,
-                    'subject_id' => $subjectId,
-                    'sequence' => $sequence + 1,
-                    'created_by' => \Auth::id(),
-                ]);
-            }
-
-            // Sync with Teacher Assignment if needed
-            $validSubjectIds = $student->compulsorySubjects()->pluck('subject_id')->merge($subjectIds)->unique();
-            \App\Models\StudentTeacherSubject::where('student_id', $student->id)
-                ->whereNotIn('subject_id', $validSubjectIds)
-                ->delete();
-        });
-    }
-
 
     /**
      * Download or print a fee voucher
@@ -923,7 +818,6 @@ class StudentController extends Controller
         return view('pdfs.fee-voucher', compact('voucher', 'settings'));
     }
 
-
     /**
      * Confirm payment for a student fee voucher
      */
@@ -935,12 +829,11 @@ class StudentController extends Controller
         ]);
 
         try {
-            $voucher->update([
-                'paid_amount' => $request->paid_amount,
-                'payment_date' => $request->payment_date,
-                'status' => 'paid',
-                'confirmed_by' => \Auth::id(),
-            ]);
+            $voucher->confirmPayment(
+                (float) $request->paid_amount,
+                $request->payment_date,
+                Auth::id()
+            );
 
             return back()->with('success', 'Payment for voucher ' . $voucher->voucher_number . ' confirmed successfully.');
         } catch (\Exception $e) {

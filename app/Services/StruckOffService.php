@@ -82,7 +82,7 @@ class StruckOffService
                 'status'                  => 'struck_off',
             ]);
 
-            $admission->update(['status' => 'Struck Off']);
+            $admission->strikeOff();
 
             return $log;
         });
@@ -108,15 +108,8 @@ class StruckOffService
         }
 
         DB::transaction(function () use ($log, $userId, $note) {
-            $log->update([
-                'status'           => 'readmitted',
-                'readmitted_by'    => $userId,
-                'readmitted_at'    => now(),
-                'readmission_note' => $note,
-            ]);
-
-            Admissions::where('id', $log->admission_id)
-                ->update(['status' => 'Active']);
+            $log->markReadmitted($userId, $note);
+            $log->admission?->activate($userId);
         });
     }
 

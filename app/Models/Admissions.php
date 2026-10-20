@@ -93,7 +93,18 @@ class Admissions extends Model
     // Scopes
     public function scopeActive(Builder $query): Builder
     {
-        return $query->where('status', 'Active');
+        return $query->whereIn('status', ['Active', 'Admitted', 'active', 'admitted'])
+                     ->whereNotIn('status', ['Struck Off', 'struck_off', 'Graduated', 'Dropped']);
+    }
+
+    public function scopeStruckOff(Builder $query): Builder
+    {
+        return $query->whereIn('status', ['Struck Off', 'struck_off']);
+    }
+
+    public function scopeNotGraduated(Builder $query): Builder
+    {
+        return $query->where('status', '!=', 'Graduated');
     }
 
     public function scopeForClass(Builder $query, string $class): Builder
@@ -111,9 +122,26 @@ class Admissions extends Model
         return $query->where('admission_year', $year);
     }
 
+    public function scopeForBatch(Builder $query, int $year): Builder
+    {
+        return $query->where('admission_year', $year);
+    }
+
     public function scopeInStatus(Builder $query, array $statuses): Builder
     {
         return $query->whereIn('status', $statuses);
+    }
+
+    /**
+     * Get unique admission years present in the database, ordered descending.
+     */
+    public static function distinctAdmissionYears(): \Illuminate\Support\Collection
+    {
+        return static::select('admission_year')
+            ->distinct()
+            ->whereNotNull('admission_year')
+            ->orderByDesc('admission_year')
+            ->pluck('admission_year');
     }
 
     // Accessors
@@ -130,6 +158,11 @@ class Admissions extends Model
     public function getIsAdmittedAttribute(): bool
     {
         return in_array($this->status, ['Admitted', 'Active', 'Graduated']);
+    }
+
+    public function getIsStruckOffAttribute(): bool
+    {
+        return in_array(strtolower($this->status), ['struck off', 'struck_off']);
     }
 
     // Mutators
@@ -153,6 +186,39 @@ class Admissions extends Model
         $this->attributes['bise_roll_12'] = $value ? strtoupper(trim($value)) : null;
     }
 
+    // Domain State Transitions
+    public function strikeOff(?int $userId = null): void
+    {
+        $this->update([
+            'status'     => 'Struck Off',
+            'updated_by' => $userId,
+        ]);
+    }
+
+    public function activate(?int $userId = null): void
+    {
+        $this->update([
+            'status'     => 'Active',
+            'updated_by' => $userId,
+        ]);
+    }
+
+    public function graduate(?int $userId = null): void
+    {
+        $this->update([
+            'status'     => 'Graduated',
+            'updated_by' => $userId,
+        ]);
+    }
+
+    public function drop(?int $userId = null): void
+    {
+        $this->update([
+            'status'     => 'Dropped',
+            'updated_by' => $userId,
+        ]);
+    }
+
     // Custom methods
     public function isEligibleForFinalExams(): bool
     {
@@ -163,22 +229,37 @@ class Admissions extends Model
 
     public function canPromoteToNextClass(): bool
     {
-        if ($this->current_class === '11' && $this->status === 'Active') {
-            return true;
+        return $this->current_class === '11' && in_array($this->status, ['Active', 'Admitted', 'active', 'admitted']);
+    }
+
+    /**
+     * Promote student from Class 11 to Class 12, advancing academic year and subject levels.
+     */
+    public function promoteToClass12(): bool
+    {
+        if (!$this->canPromoteToNextClass()) {
+            return false;
         }
-        return false;
+
+        $nextAcademicYear = ($this->academic_year ?: $this->admission_year) + 1;
+
+        $this->update([
+            'current_class' => '12',
+            'academic_year' => $nextAcademicYear,
+        ]);
+
+        // Promote compulsory subject levels
+        \Illuminate\Support\Facades\DB::table('student_compulsory_subjects')
+            ->where('student_id', $this->student_id)
+            ->where('class_level', '11')
+            ->update(['class_level' => '12']);
+
+        return true;
     }
 
     public function promoteToNextClass(): bool
     {
-        if ($this->canPromoteToNextClass()) {
-            $this->update([
-                'current_class' => '12',
-                'academic_year' => $this->admission_year + 1
-            ]);
-            return true;
-        }
-        return false;
+        return $this->promoteToClass12();
     }
 
     public function getStatusColor(): string
