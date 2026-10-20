@@ -63,6 +63,40 @@ class HeAdmission extends Model
         }
     }
 
+    /**
+     * Get unique admission years for HE admissions, ordered descending.
+     */
+    public static function distinctAdmissionYears(): \Illuminate\Support\Collection
+    {
+        return static::select('admission_year')
+            ->distinct()
+            ->whereNotNull('admission_year')
+            ->orderByDesc('admission_year')
+            ->pluck('admission_year');
+    }
+
+    // Scopes
+    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->whereIn('status', ['Active', 'Admitted', 'active', 'admitted'])
+                     ->whereNotIn('status', ['Struck Off', 'struck_off', 'Graduated', 'Dropped']);
+    }
+
+    public function scopeForBatch(\Illuminate\Database\Eloquent\Builder $query, int $year): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('admission_year', $year);
+    }
+
+    public function scopeForProgram(\Illuminate\Database\Eloquent\Builder $query, int $programId): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('program_id', $programId);
+    }
+
+    public function scopeForSemester(\Illuminate\Database\Eloquent\Builder $query, int $semester): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->where('current_semester', $semester);
+    }
+
     public function getStatusColor(): string
     {
         return match($this->status) {

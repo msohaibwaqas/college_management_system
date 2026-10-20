@@ -25,10 +25,7 @@ class DatesheetController extends Controller
 
     public function create()
     {
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
             
         $subjects = Subject::orderBy('name')->get();
 
@@ -189,10 +186,7 @@ class DatesheetController extends Controller
 
     public function generate()
     {
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
 
         return view('datesheets.generate', compact('admissionYears'));
     }
@@ -243,12 +237,9 @@ class DatesheetController extends Controller
                 $currentClass = $batchInfo ? $batchInfo->current_class : null;
 
                 // 2. Get Students
-                // 2. Get Students
-                $students = Student::join('admissions', 'students.id', '=', 'admissions.student_id')
-                    ->where('admissions.admission_year', $year)
-                    ->whereIn('admissions.status', ['Admitted', 'Active'])
-                    ->select('students.id')
-                    ->get();
+                $students = Student::active()
+                    ->inBatch($year)
+                    ->get(['id']);
 
                 if ($students->isEmpty()) continue;
                 $studentIds = $students->pluck('id');
@@ -485,13 +476,11 @@ class DatesheetController extends Controller
     }
 
     private function getStudentIdsForSubject($subjectId, $admissionYear)
-        {
+    {
         $subject = Subject::find($subjectId);
         if (!$subject) return collect();
 
-        $query = Student::join('admissions', 'students.id', '=', 'admissions.student_id')
-            ->where('admissions.admission_year', $admissionYear)
-            ->whereIn('admissions.status', ['Admitted', 'Active']);
+        $query = Student::active()->inBatch($admissionYear);
 
         if ($subject->type === 'Compulsory') {
             $query->where(function($q) use ($subjectId) {
@@ -509,6 +498,6 @@ class DatesheetController extends Controller
             });
         }
 
-        return $query->pluck('students.id');
+        return $query->pluck('id');
     }
 }

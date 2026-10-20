@@ -19,10 +19,7 @@ class ResultController extends Controller
      */
     public function index(Request $request)
     {
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
 
         // Group by test to show as "Tests" rather than individual student results
         $testsQuery = Result::select(
@@ -485,10 +482,7 @@ class ResultController extends Controller
             return redirect()->route('dashboard')->with('error', 'Access denied.');
         }
 
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
             
         return view('results.final_create', compact('admissionYears'));
     }
@@ -503,10 +497,7 @@ class ResultController extends Controller
             'bise_roll_12' => 'required|string',
         ]);
 
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
 
         $student = Student::with(['admissions', 'father', 'compulsorySubjects.subject', 'electives.subject'])
             ->whereHas('admissions', function($q) use ($request) {
@@ -673,10 +664,7 @@ class ResultController extends Controller
             return redirect()->route('dashboard')->with('error', 'Access denied.');
         }
 
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
             
         return view('results.eleventh_create', compact('admissionYears'));
     }
@@ -691,10 +679,7 @@ class ResultController extends Controller
             'bise_roll_11' => 'required|string',
         ]);
 
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
 
         $student = Student::with(['admissions', 'father', 'compulsorySubjects.subject', 'electives.subject'])
             ->whereHas('admissions', function($q) use ($request) {
@@ -826,10 +811,7 @@ class ResultController extends Controller
      */
     public function viewFinalResults(Request $request)
     {
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $admissionYears = Admissions::distinctAdmissionYears();
 
         $students = collect();
         $stats = [

@@ -40,10 +40,7 @@ class HeDatesheetController extends Controller
         $datesheets = $query->paginate(25);
 
         $programs = Program::orderBy('name')->get();
-        $academicYears = HeAdmission::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $academicYears = HeAdmission::distinctAdmissionYears();
 
         return view('he.datesheets.index', compact('datesheets', 'programs', 'academicYears'));
     }
@@ -54,10 +51,7 @@ class HeDatesheetController extends Controller
     public function create()
     {
         $programs = Program::orderBy('name')->get();
-        $academicYears = HeAdmission::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $academicYears = HeAdmission::distinctAdmissionYears();
 
         return view('he.datesheets.create', compact('programs', 'academicYears'));
     }

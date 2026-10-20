@@ -53,10 +53,7 @@ class HeResultController extends Controller
         $results = $query->paginate(25);
 
         $programs = Program::orderBy('name')->get();
-        $academicYears = HeAdmission::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $academicYears = HeAdmission::distinctAdmissionYears();
 
         return view('he.results.index', compact('results', 'programs', 'academicYears'));
     }
@@ -83,10 +80,7 @@ class HeResultController extends Controller
             $programs = Program::orderBy('name')->get();
         }
 
-        $academicYears = HeAdmission::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $academicYears = HeAdmission::distinctAdmissionYears();
 
         // Pre-selected values from dashboard
         $preSelected = [
@@ -443,10 +437,7 @@ class HeResultController extends Controller
         $studentResults = $results->groupBy('he_admission_id');
 
         $programs = Program::orderBy('name')->get();
-        $academicYears = HeAdmission::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $academicYears = HeAdmission::distinctAdmissionYears();
 
         return view('he.results.summary', compact('studentResults', 'programs', 'academicYears'));
     }
