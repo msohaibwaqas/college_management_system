@@ -10,7 +10,7 @@
                 <i class="fas fa-user-slash text-danger me-2"></i>Struck-Off — Eligible Students
             </h1>
             <p class="text-muted small mb-0 mt-1">
-                Viewing assigned students exceeding the policy absence threshold (<strong>&ge; {{ $settings->absent_threshold }} absents</strong>).
+                Viewing assigned students exceeding the monthly absence threshold (<strong>&ge; {{ $settings->absent_threshold }} absents in selected month</strong>). Note: Absences prior to readmission are automatically reset.
             </p>
         </div>
         <div class="d-flex gap-2">
@@ -85,11 +85,10 @@
                     <input type="hidden" name="class" value="{{ $selectedClass }}">
                 </div>
 
-                {{-- 3. Attendance Period / Month --}}
+                {{-- 3. Attendance Month (Strict Monthly Policy) --}}
                 <div class="col-md-3">
-                    <label class="form-label fw-bold small text-muted">3. Attendance Period</label>
+                    <label class="form-label fw-bold small text-muted">3. Attendance Month (Monthly)</label>
                     <select name="month" class="form-select" onchange="this.form.submit()">
-                        <option value="all" {{ ($selectedMonth === 'all') ? 'selected' : '' }}>Entire Academic Session</option>
                         @foreach($availableMonths as $m)
                             @php
                                 try {
@@ -99,7 +98,7 @@
                                 }
                             @endphp
                             <option value="{{ $m }}" {{ ($selectedMonth === $m) ? 'selected' : '' }}>
-                                In {{ $mLabel }}
+                                {{ $mLabel }}
                             </option>
                         @endforeach
                     </select>
@@ -107,9 +106,9 @@
 
                 {{-- 4. Min Absents (Set by Admin Policy - Non-editable by Teacher) --}}
                 <div class="col-md-2">
-                    <label class="form-label fw-bold small text-muted">Min Absents</label>
+                    <label class="form-label fw-bold small text-muted">Min Absents / Month</label>
                     <div class="form-control bg-light text-center fw-bold text-danger d-flex align-items-center justify-content-center"
-                         title="Configured by Admin in College Policy Rules">
+                         title="Configured by Admin in College Policy Rules (Monthly threshold)">
                         <i class="fas fa-lock text-muted me-1 small"></i> &ge; {{ $settings->absent_threshold }} Absents
                     </div>
                 </div>
@@ -131,19 +130,20 @@
                     Showing students assigned to you with <strong>&ge; {{ $settings->absent_threshold }} absents</strong> in
                     @php
                         $activeSubject = $subjectsForYear->firstWhere('subject_id', $selectedSubjectId);
+                        try {
+                            $formattedMonth = \Carbon\Carbon::createFromFormat('Y-m', $selectedMonth)->format('F Y');
+                        } catch (\Exception $e) {
+                            $formattedMonth = $selectedMonth;
+                        }
                     @endphp
                     <strong>{{ $activeSubject->subject_name ?? 'Subject #' . $selectedSubjectId }}</strong>
                     (Class {{ $selectedClass ?? ($activeSubject->current_class ?? '') }}th, Batch {{ $selectedYear }})
-                    @if($selectedMonth && $selectedMonth !== 'all')
-                        for <strong>{{ \Carbon\Carbon::createFromFormat('Y-m', $selectedMonth)->format('F Y') }}</strong>
-                    @else
-                        (Entire Session)
-                    @endif
+                    for <strong>{{ $formattedMonth }}</strong>
                 </div>
             </div>
             <div>
                 <span class="badge bg-light text-dark border p-2">
-                    <i class="fas fa-info-circle text-primary me-1"></i> Policy: &ge; {{ $settings->absent_threshold }} absents | Max {{ $settings->max_readmissions_per_year }} readmissions/yr
+                    <i class="fas fa-info-circle text-primary me-1"></i> Policy: &ge; {{ $settings->absent_threshold }} absents/mo | Max {{ $settings->max_readmissions_per_year }} readmissions/yr
                 </span>
             </div>
         </div>
@@ -153,12 +153,8 @@
                     <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
                     <h5 class="fw-bold text-dark">No Students Exceed Threshold</h5>
                     <p class="mb-0 text-muted">
-                        None of your assigned students in Class {{ $selectedClass }}th (Batch {{ $selectedYear }}) exceeded the policy threshold of {{ $settings->absent_threshold }} absents
-                        @if($selectedMonth && $selectedMonth !== 'all')
-                            for {{ \Carbon\Carbon::createFromFormat('Y-m', $selectedMonth)->format('F Y') }}.
-                        @else
-                            for this session.
-                        @endif
+                        None of your assigned students in Class {{ $selectedClass }}th (Batch {{ $selectedYear }}) exceeded the monthly threshold of {{ $settings->absent_threshold }} absents
+                        for {{ $formattedMonth }}.
                     </p>
                 </div>
             @else
@@ -171,7 +167,7 @@
                                 <th>Father Name</th>
                                 <th>College Roll No</th>
                                 <th>Class &amp; Batch</th>
-                                <th class="text-center">Absences</th>
+                                <th class="text-center">Monthly Absences</th>
                                 <th class="text-center">Status / Action</th>
                             </tr>
                         </thead>
@@ -198,9 +194,7 @@
                                     <span class="badge bg-danger fs-6 px-3 py-2">
                                         {{ $s->absence_count }} Absents
                                     </span>
-                                    @if($selectedMonth && $selectedMonth !== 'all')
-                                        <div class="small text-muted mt-1">{{ \Carbon\Carbon::createFromFormat('Y-m', $selectedMonth)->format('M Y') }}</div>
-                                    @endif
+                                    <div class="small text-muted mt-1">{{ $formattedMonth }}</div>
                                 </td>
                                 <td class="text-center">
                                     @if($s->already_struck_off)
@@ -230,7 +224,7 @@
                                                         <div class="alert alert-warning border-0">
                                                             <i class="fas fa-exclamation-triangle me-2"></i>
                                                             <strong>{{ trim($s->first_name . ' ' . $s->last_name) }}</strong> will be
-                                                            struck off the college rolls due to <strong>{{ $s->absence_count }} absents</strong>.
+                                                            struck off the college rolls due to <strong>{{ $s->absence_count }} absents</strong> in <strong>{{ $formattedMonth }}</strong>.
                                                             They will be excluded from attendance lists until readmitted by the Admin / Principal.
                                                         </div>
                                                         <form id="strikeForm{{ $s->student_id }}"
@@ -242,7 +236,7 @@
                                                             <div class="mb-3">
                                                                 <label class="form-label fw-bold small">Reason for Strike-Off <span class="text-muted">(optional)</span></label>
                                                                 <textarea name="reason" class="form-control" rows="3"
-                                                                          placeholder="e.g. Exceeded {{ $settings->absent_threshold }} absents threshold..."></textarea>
+                                                                          placeholder="e.g. Exceeded {{ $settings->absent_threshold }} absents in {{ $formattedMonth }}..."></textarea>
                                                             </div>
                                                         </form>
                                                     </div>

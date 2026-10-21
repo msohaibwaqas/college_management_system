@@ -496,18 +496,40 @@ Route::middleware(['auth'])->group(function () {
 
     // Struck-Off Management
     Route::prefix('struck-off')->name('struck-off.')->group(function () {
-        // Teacher, Admin, Principal, Clerk: view eligible students, list struck-off students, and view history
+        // Teacher, Admin, Principal, Clerk: view eligible students, list struck-off students, history, and readmit (policy enforced by FormRequest/Service)
         Route::middleware('role:teacher,admin,principal,super_admin,clerk,hssc_clerk,hssc_admin')->group(function () {
             Route::get('/', [\App\Http\Controllers\StruckOffController::class, 'index'])->name('index');
             Route::get('/teacher', [\App\Http\Controllers\StruckOffController::class, 'teacherPanel'])->name('teacher');
             Route::post('/', [\App\Http\Controllers\StruckOffController::class, 'store'])->name('store');
             Route::get('/student/{student}/history', [\App\Http\Controllers\StruckOffController::class, 'history'])->name('history');
+            Route::post('/{log}/readmit', [\App\Http\Controllers\StruckOffController::class, 'readmit'])->name('readmit');
         });
 
-        // Admin / Principal / Clerk: settings, readmission
+        // Admin / Principal / Clerk: settings, bulk readmit
         Route::middleware('role:admin,principal,clerk,hssc_clerk,hssc_admin,super_admin')->group(function () {
             Route::post('/settings', [\App\Http\Controllers\StruckOffController::class, 'updateSettings'])->name('settings.update');
-            Route::post('/{log}/readmit', [\App\Http\Controllers\StruckOffController::class, 'readmit'])->name('readmit');
+            Route::post('/bulk-readmit', [\App\Http\Controllers\StruckOffController::class, 'bulkReadmit'])->name('bulk-readmit');
+        });
+    });
+
+    // Student Fine Management
+    Route::prefix('fines')->name('fines.')->group(function () {
+        // Shared: view fines and printable slips
+        Route::middleware('role:admin,principal,clerk,hssc_clerk,hssc_admin,super_admin,accountant,hssc_accountant,bs_accountant,teacher')->group(function () {
+            Route::get('/', [\App\Http\Controllers\FineController::class, 'index'])->name('index');
+            Route::get('/slip/{fine}', [\App\Http\Controllers\FineController::class, 'printSlip'])->name('slip');
+            Route::get('/summary-print', [\App\Http\Controllers\FineController::class, 'printSummary'])->name('print-summary');
+        });
+
+        // Administrative & Accounts: calculation, generation, policy rules, payments, and waivers
+        Route::middleware('role:admin,principal,clerk,hssc_clerk,hssc_admin,super_admin,accountant,hssc_accountant,bs_accountant')->group(function () {
+            Route::get('/generate', [\App\Http\Controllers\FineController::class, 'generateForm'])->name('generate');
+            Route::post('/generate', [\App\Http\Controllers\FineController::class, 'storeGenerated'])->name('generate.store');
+            Route::get('/rules', [\App\Http\Controllers\FineController::class, 'rulesIndex'])->name('rules');
+            Route::post('/rules', [\App\Http\Controllers\FineController::class, 'storeRule'])->name('rules.store');
+            Route::put('/rules/{rule}', [\App\Http\Controllers\FineController::class, 'updateRule'])->name('rules.update');
+            Route::post('/{fine}/payment', [\App\Http\Controllers\FineController::class, 'collectPayment'])->name('collect-payment');
+            Route::post('/{fine}/waive', [\App\Http\Controllers\FineController::class, 'waiveFine'])->name('waive');
         });
     });
 

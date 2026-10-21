@@ -293,6 +293,22 @@
                     </li>
                     @endif
 
+                    {{-- Fine Management --}}
+                    <li>
+                        <a href="#" class="menu-toggle {{ request()->routeIs('fines.*') ? 'active' : '' }}" data-target="fines-menu">
+                            <i class="fas fa-file-invoice-dollar text-warning"></i>
+                            <span>Fine Management</span>
+                            <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                        </a>
+                        <ul class="submenu" id="fines-menu">
+                            <li><a href="{{ route('fines.index') }}" class="{{ request()->routeIs('fines.index') ? 'active' : '' }}">All Fines &amp; Dues</a></li>
+                            @if($activeRole != 'teacher')
+                                <li><a href="{{ route('fines.generate') }}" class="{{ request()->routeIs('fines.generate') ? 'active' : '' }}">Calculate &amp; Generate</a></li>
+                                <li><a href="{{ route('fines.rules') }}" class="{{ request()->routeIs('fines.rules') ? 'active' : '' }}">Policy Rules &amp; Rates</a></li>
+                            @endif
+                        </ul>
+                    </li>
+
 
                     {{-- Academic Info --}}
                     @if($activeRole != 'teacher')
@@ -356,6 +372,7 @@
                         <li><a href="{{ route('attendance.reports.form') }}" class="{{ request()->routeIs('attendance.reports.*') ? 'active' : '' }}">Attendance History</a></li>
                         <li><a href="{{ route('struck-off.index') }}" class="{{ request()->routeIs('struck-off.index') ? 'active' : '' }}"><i class="fas fa-user-slash text-danger me-1"></i> Struck-Off Students</a></li>
                         <li><a href="{{ route('struck-off.teacher') }}" class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}"><i class="fas fa-user-times text-warning me-1"></i> Strike Off Eligible</a></li>
+                        <li><a href="{{ route('fines.index') }}" class="{{ request()->routeIs('fines.*') ? 'active' : '' }}"><i class="fas fa-file-invoice-dollar text-warning me-1"></i> Student Fines</a></li>
                         
                         {{-- ADP / BS --}}
                         <li class="submenu-header text-muted small ps-3 mt-2 mb-1">ADP / BS</li>
@@ -382,6 +399,7 @@
                             @if($activeRole != 'teacher')
                             <li><a href="{{ route('struck-off.index') }}" class="{{ request()->routeIs('struck-off.index') ? 'active' : '' }}"><i class="fas fa-user-slash text-danger me-1"></i> Struck-Off Students</a></li>
                             <li><a href="{{ route('struck-off.teacher') }}" class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}"><i class="fas fa-user-times text-warning me-1"></i> Strike Off Eligible</a></li>
+                        <li><a href="{{ route('fines.index') }}" class="{{ request()->routeIs('fines.*') ? 'active' : '' }}"><i class="fas fa-file-invoice-dollar text-warning me-1"></i> Student Fines</a></li>
                             @endif
                         </ul>
                     </li>

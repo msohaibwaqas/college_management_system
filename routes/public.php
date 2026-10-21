@@ -29,6 +29,7 @@ Route::get('/principals/{id}', [PublicController::class, 'principalShow'])->name
 Route::get('/students-corner', [PublicController::class, 'studentsCorner'])->name('public.students-corner');
 Route::match(['get', 'post'], '/students-corner/search', [PublicController::class, 'searchStudent'])->name('public.students.search')->middleware('throttle:10,1');
 Route::get('/students-corner/vouchers/{voucher}/download', [PublicController::class, 'downloadStudentVoucher'])->name('public.students.voucher.download');
+Route::get('/students-corner/fines/{fine}/voucher', [PublicController::class, 'downloadFineVoucher'])->name('public.students.fine.voucher');
 Route::get('/about', [PublicController::class, 'about'])->name('public.about');
 Route::get('/contact', [PublicController::class, 'contact'])->name('public.contact');
 

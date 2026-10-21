@@ -6,6 +6,7 @@ use App\Models\Admissions;
 use App\Models\Attendance;
 use App\Models\StruckOffSetting;
 use App\Models\StudentStruckOffLog;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -34,21 +35,38 @@ class StruckOffService
         $settings = $this->getSettings();
         $threshold = (int) $settings->absent_threshold;
         if ($threshold < 1) {
-            $threshold = 10;
+            $threshold = 20;
         }
 
-        // Verify absence count meets policy threshold
+        // Strict monthly enforcement: strike-off cannot be based on whole year
+        $month = ($month && $month !== 'all') ? $month : now()->format('Y-m');
+
+        // Check if student has previous readmission - only absences AFTER latest readmission count
+        $latestReadmit = StudentStruckOffLog::where('student_id', $studentId)
+            ->where('status', 'readmitted')
+            ->latest('readmitted_at')
+            ->first();
+
+        // Verify absence count meets policy threshold for the specified month
         $attQuery = Attendance::where('student_id', $studentId)
             ->where('subject_id', $subjectId)
-            ->where('status', 'absent');
+            ->where('status', 'absent')
+            ->whereRaw("DATE_FORMAT(attendance_date, '%Y-%m') = ?", [$month]);
 
-        if ($month && $month !== 'all') {
-            $attQuery->whereRaw("DATE_FORMAT(attendance_date, '%Y-%m') = ?", [$month]);
+        if ($latestReadmit) {
+            $lastDate = $latestReadmit->readmitted_at
+                ? $latestReadmit->readmitted_at->format('Y-m-d')
+                : ($latestReadmit->struck_off_at ? $latestReadmit->struck_off_at->format('Y-m-d') : null);
+            if ($lastDate) {
+                $attQuery->where('attendance_date', '>', $lastDate);
+            }
         }
 
         $absenceCount = $attQuery->count();
         if ($absenceCount < $threshold) {
-            throw new InvalidArgumentException("Student has {$absenceCount} absents in this subject, which is below the policy threshold of {$threshold} to strike off.");
+            throw new InvalidArgumentException(
+                "Student has only {$absenceCount} absent(s) in this subject for {$month} (since last readmission), which is below the required policy threshold of {$threshold} to strike off."
+            );
         }
 
         // Check if already struck off
@@ -89,7 +107,11 @@ class StruckOffService
     }
 
     /**
-     * Readmit a struck off student if eligible under college limits.
+     * Readmit a struck off student if eligible under college limits and role policy.
+     *
+     * Policy Rules:
+     * - 1st strike-off: Striking teacher or Admin / Clerk.
+     * - 2nd+ strike-off: ONLY Admin and Clerk can readmit.
      *
      * @throws InvalidArgumentException
      */
@@ -107,10 +129,43 @@ class StruckOffService
             throw new InvalidArgumentException("This student has already been readmitted {$count} times this academic year. Maximum {$maxAllowed} readmissions per year are allowed according to college policy.");
         }
 
+        $user = User::find($userId);
+        if (!$log->canUserReadmit($user, $maxAllowed)) {
+            $reason = $log->getReadmissionRestrictionReason($user, $maxAllowed)
+                ?? "You are not authorized to readmit this student.";
+            throw new InvalidArgumentException($reason);
+        }
+
         DB::transaction(function () use ($log, $userId, $note) {
             $log->markReadmitted($userId, $note);
             $log->admission?->activate($userId);
         });
+    }
+
+    /**
+     * Bulk readmit all eligible currently struck-off students.
+     *
+     * @return int Number of students readmitted
+     */
+    public function bulkReadmit(int $userId, ?string $note = null): int
+    {
+        $settings = $this->getSettings();
+        $maxAllowed = (int) $settings->max_readmissions_per_year;
+
+        $logs = StudentStruckOffLog::where('status', 'struck_off')->get();
+        $count = 0;
+
+        DB::transaction(function () use ($logs, $userId, $note, $maxAllowed, &$count) {
+            foreach ($logs as $log) {
+                if ($log->canBeReadmitted($maxAllowed)) {
+                    $log->markReadmitted($userId, $note ?? 'Bulk readmitted as per policy reset');
+                    $log->admission?->activate($userId);
+                    $count++;
+                }
+            }
+        });
+
+        return $count;
     }
 
     /**

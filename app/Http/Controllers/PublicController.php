@@ -380,7 +380,7 @@ class PublicController extends Controller
                       });
             })
             ->with(['student' => function($q) {
-                $q->withTrashed()->with(['father', 'sscRecord', 'compulsorySubjects.subject', 'electives.subject', 'vouchers']);
+                $q->withTrashed()->with(['father', 'sscRecord', 'compulsorySubjects.subject', 'electives.subject', 'vouchers', 'fines.fineRule']);
             }])
             ->first();
 
@@ -600,7 +600,7 @@ class PublicController extends Controller
                       });
             })
             ->with(['student' => function($q) {
-                $q->withTrashed()->with(['father', 'vouchers']);
+                $q->withTrashed()->with(['father', 'vouchers', 'fines.fineRule']);
             }, 'program'])
             ->first();
 
@@ -690,6 +690,15 @@ class PublicController extends Controller
         
         return view('pdfs.fee-voucher', compact('voucher', 'settings'));
     }
+
+    public function downloadFineVoucher(\App\Models\StudentFine $fine)
+    {
+        $fine->load(['student.father', 'admission', 'fineRule']);
+        $settings = \App\Models\InstituteSetting::getSettings();
+        
+        return view('pdfs.fine-voucher', compact('fine', 'settings'));
+    }
+
 
     public function about()
     {

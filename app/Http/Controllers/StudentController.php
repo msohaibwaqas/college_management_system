@@ -323,17 +323,13 @@ class StudentController extends Controller
             ->orderBy('deleted_at', 'desc');
 
         if ($request->filled('search')) {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhereHas('admissions', function($subQ) use ($search) {
-                      $subQ->where('college_roll_no', 'like', "%{$search}%");
-                  });
-            });
+            $query->search($request->search);
         }
 
-        $students = $query->paginate(50)->appends($request->except('page'));
+        $perPage = (int) $request->get('per_page', 50);
+        if ($perPage < 1) $perPage = 50;
+
+        $students = $query->paginate($perPage)->withQueryString();
             
         return view('students.trash', compact('students'));
     }

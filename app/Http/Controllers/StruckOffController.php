@@ -36,15 +36,19 @@ class StruckOffController extends Controller
         $staffId  = $staff ? $staff->id : null;
         $settings = StruckOffSetting::getSettings();
 
-        // 1. Min Absents is strictly controlled by Admin policy
+        // 1. Min Absents is strictly controlled by Admin policy (default: 20)
         $threshold = (int) $settings->absent_threshold;
         if ($threshold < 1) {
-            $threshold = 10;
+            $threshold = 20;
         }
 
-        // 2. Parse request parameters
+        // 2. Parse request parameters - Strictly enforce monthly calculation
         $year = $request->filled('year') ? (int) $request->query('year') : null;
-        $month = $request->query('month', $settings->calculation_period === 'monthly' ? now()->format('Y-m') : 'all');
+        $currentMonth = now()->format('Y-m');
+        $month = $request->query('month', $currentMonth);
+        if (!$month || $month === 'all') {
+            $month = $currentMonth;
+        }
 
         // Handle class_subject format: subject_id:class:year
         if ($request->filled('class_subject') && str_contains($request->class_subject, ':')) {
@@ -123,20 +127,34 @@ class StruckOffController extends Controller
             ->limit(12)
             ->pluck('m');
 
+        if (!$availableMonths->contains($currentMonth)) {
+            $availableMonths->prepend($currentMonth);
+        }
+
         // 5. Query eligible students strictly assigned to this teacher
         $eligibleStudents = collect();
 
         if ($subjectId && $year) {
-            $attQuery = DB::table('attendances')
-                ->where('subject_id', $subjectId)
-                ->where('status', 'absent');
-
-            if ($month && $month !== 'all') {
-                $attQuery->whereRaw("DATE_FORMAT(attendance_date, '%Y-%m') = ?", [$month]);
-            }
-
-            $absSubQuery = $attQuery->select('student_id', DB::raw('COUNT(*) AS absence_count'))
+            // Subquery for the latest readmission date per student (to exclude absences on or prior to readmission)
+            $latestReadmitSub = DB::table('student_struck_off_logs')
+                ->select('student_id', DB::raw('MAX(DATE(COALESCE(readmitted_at, struck_off_at))) as last_readmitted_date'))
+                ->where('status', 'readmitted')
                 ->groupBy('student_id');
+
+            $attQuery = DB::table('attendances')
+                ->leftJoinSub($latestReadmitSub, 'lr', function ($join) {
+                    $join->on('attendances.student_id', '=', 'lr.student_id');
+                })
+                ->where('attendances.subject_id', $subjectId)
+                ->where('attendances.status', 'absent')
+                ->whereRaw("DATE_FORMAT(attendances.attendance_date, '%Y-%m') = ?", [$month])
+                ->where(function ($q) {
+                    $q->whereNull('lr.last_readmitted_date')
+                      ->orWhereColumn('attendances.attendance_date', '>', 'lr.last_readmitted_date');
+                });
+
+            $absSubQuery = $attQuery->select('attendances.student_id', DB::raw('COUNT(*) AS absence_count'))
+                ->groupBy('attendances.student_id');
 
             $eligibleQuery = DB::table('student_teacher_subjects')
                 ->join('students', 'student_teacher_subjects.student_id', '=', 'students.id')
@@ -293,7 +311,15 @@ class StruckOffController extends Controller
             $query->where('academic_year', $request->year);
         }
 
-        $logs = $query->paginate(30)->withQueryString();
+        // Search by student name, roll number, father name, subject, or teacher
+        if ($request->filled('search')) {
+            $query->search($request->search);
+        }
+
+        $perPage = (int) $request->get('per_page', 30);
+        if ($perPage < 1) $perPage = 30;
+
+        $logs = $query->paginate($perPage)->withQueryString();
 
         $yearsQuery = StudentStruckOffLog::select('academic_year')
             ->distinct()
@@ -306,11 +332,13 @@ class StruckOffController extends Controller
 
         $availableYears = $yearsQuery->pluck('academic_year');
 
-        return view('struck-off.index', compact('logs', 'statusFilter', 'availableYears', 'settings', 'isTeacher'));
+        $activeStruckOffCount = StudentStruckOffLog::where('status', 'struck_off')->count();
+
+        return view('struck-off.index', compact('logs', 'statusFilter', 'availableYears', 'settings', 'isTeacher', 'activeStruckOffCount'));
     }
 
     // -------------------------------------------------------
-    // ADMIN / CLERK: readmit a struck-off student
+    // ADMIN / CLERK: readmit a single struck-off student
     // -------------------------------------------------------
     public function readmit(ReadmitStudentRequest $request, StudentStruckOffLog $log)
     {
@@ -326,6 +354,20 @@ class StruckOffController extends Controller
             $maxAllowed = $this->struckOffService->getSettings()->max_readmissions_per_year;
             return back()->with('success', "Student {$student->full_name} has been readmitted successfully (Readmission #{$readmissionCount} of max {$maxAllowed}).");
         } catch (\InvalidArgumentException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
+    // -------------------------------------------------------
+    // ADMIN / PRINCIPAL / CLERK: bulk readmit struck-off students
+    // -------------------------------------------------------
+    public function bulkReadmit(Request $request)
+    {
+        $note = $request->input('readmission_note', 'Bulk readmitted as per policy reset');
+        try {
+            $count = $this->struckOffService->bulkReadmit(Auth::id(), $note);
+            return back()->with('success', "{$count} students have been successfully readmitted.");
+        } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
     }

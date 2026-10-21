@@ -141,6 +141,107 @@
     </div>
     @endif
 
+    
+    {{-- Disciplinary & Academic Fines --}}
+    @if($student->fines && $student->fines->isNotEmpty())
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Fines & Disciplinary Penalties</h5>
+            @if($student->totalOutstandingFine() > 0)
+                <span class="badge bg-light text-danger fw-bold fs-6">Outstanding: Rs. {{ number_format($student->totalOutstandingFine(), 2) }}</span>
+            @else
+                <span class="badge bg-success text-white"><i class="fas fa-check-circle me-1"></i>All Fines Paid</span>
+            @endif
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="padding-left: 15px;">Voucher #</th>
+                            <th>Type & Description</th>
+                            <th>Units / Rate</th>
+                            <th>Total Fine</th>
+                            <th>Waived / Paid</th>
+                            <th>Payable Balance</th>
+                            <th>Status</th>
+                            <th class="text-end" style="padding-right: 15px;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($student->fines->sortByDesc('id') as $fine)
+                        <tr>
+                            <td style="padding-left: 15px;">
+                                <strong>FIN-{{ str_pad($fine->id, 5, "0", STR_PAD_LEFT) }}</strong>
+                                <small class="text-muted d-block">{{ $fine->created_at ? $fine->created_at->format("d-M-Y") : "-" }}</small>
+                            </td>
+                            <td>
+                                <strong class="text-dark">{{ $fine->formatted_type }}</strong>
+                                <div class="small text-muted">{{ $fine->reason }}</div>
+                                @if($fine->period)
+                                    <span class="badge bg-secondary text-white" style="font-size: 0.75rem;">Period: {{ $fine->period }}</span>
+                                @endif
+                                @if($fine->exam_name)
+                                    <span class="badge bg-secondary text-white" style="font-size: 0.75rem;">Exam: {{ $fine->exam_name }}</span>
+                                @endif
+                            </td>
+                            <td>
+                                {{ $fine->units_count }} &times; Rs. {{ number_format($fine->amount_per_unit, 2) }}
+                            </td>
+                            <td><strong>Rs. {{ number_format($fine->total_amount, 2) }}</strong></td>
+                            <td>
+                                @if($fine->waived_amount > 0)
+                                    <span class="text-warning d-block" title="Waived amount">Waived: Rs. {{ number_format($fine->waived_amount, 2) }}</span>
+                                @endif
+                                @if($fine->paid_amount > 0)
+                                    <span class="text-success d-block" title="Paid amount">Paid: Rs. {{ number_format($fine->paid_amount, 2) }}</span>
+                                @endif
+                                @if($fine->waived_amount == 0 && $fine->paid_amount == 0)
+                                    <span class="text-muted">-</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($fine->balance_amount > 0)
+                                    <strong class="text-danger">Rs. {{ number_format($fine->balance_amount, 2) }}</strong>
+                                @else
+                                    <span class="text-success fw-bold">Rs. 0.00</span>
+                                @endif
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ $fine->status_badge }} text-uppercase px-2 py-1">
+                                    {{ str_replace("_", " ", $fine->status) }}
+                                </span>
+                            </td>
+                            <td class="text-end" style="padding-right: 15px;">
+                                <a href="{{ route('public.students.fine.voucher', $fine->id) }}" target="_blank" class="btn btn-sm btn-outline-danger rounded-pill">
+                                    <i class="fas fa-file-invoice me-1"></i> Download Voucher
+                                </a>
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    @else
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 text-success"><i class="fas fa-shield-alt me-2"></i>Fines & Disciplinary Status</h5>
+            <span class="badge bg-success"><i class="fas fa-check me-1"></i>No Dues</span>
+        </div>
+        <div class="card-body py-3">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-check-circle text-success fs-3 me-3"></i>
+                <div>
+                    <strong class="text-success d-block">No outstanding fines or disciplinary penalties recorded.</strong>
+                    <small class="text-muted">Your disciplinary dues record is completely clear. No fine vouchers pending.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
     {{-- Current Semester Subjects --}}
     <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-success text-white">

@@ -168,6 +168,21 @@ class Student extends Model
         return $this->hasMany(StudentStruckOffLog::class, 'student_id', 'id');
     }
 
+    public function fines(): HasMany
+    {
+        return $this->hasMany(StudentFine::class, 'student_id', 'id');
+    }
+
+    public function unpaidFines(): HasMany
+    {
+        return $this->hasMany(StudentFine::class, 'student_id', 'id')->whereIn('status', ['unpaid', 'partially_paid']);
+    }
+
+    public function totalOutstandingFine(): float
+    {
+        return (float) $this->unpaidFines()->sum('balance_amount');
+    }
+
     /**
      * Returns the active (not-yet-readmitted) struck-off log, if any.
      */
@@ -244,9 +259,14 @@ class Student extends Model
 
     public function scopeSearch(Builder $query, string $search): Builder
     {
+        $search = trim($search);
         return $query->where(function ($q) use ($search) {
             $q->where('first_name', 'like', "%{$search}%")
               ->orWhere('last_name', 'like', "%{$search}%")
+              ->orWhereRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) LIKE ?", ["%{$search}%"])
+              ->orWhereHas('father', function ($fq) use ($search) {
+                  $fq->where('name', 'like', "%{$search}%");
+              })
               ->orWhereHas('admissions', function ($subQ) use ($search) {
                   $subQ->where('college_roll_no', 'like', "%{$search}%")
                        ->orWhere('bise_roll_11', 'like', "%{$search}%")

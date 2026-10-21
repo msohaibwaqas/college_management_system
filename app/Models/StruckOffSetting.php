@@ -32,8 +32,8 @@ class StruckOffSetting extends Model
                     return $setting;
                 }
                 return static::create([
-                    'absent_threshold'          => 10,
-                    'max_readmissions_per_year' => 2,
+                    'absent_threshold'          => 20,
+                    'max_readmissions_per_year' => 3,
                     'calculation_period'        => 'monthly',
                 ]);
             }
@@ -42,8 +42,8 @@ class StruckOffSetting extends Model
         }
 
         $fallback = new static([
-            'absent_threshold'          => 10,
-            'max_readmissions_per_year' => 2,
+            'absent_threshold'          => 20,
+            'max_readmissions_per_year' => 3,
             'calculation_period'        => 'monthly',
         ]);
         $fallback->id = 1;
