@@ -3,11 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Builder;
 use App\Models\Semester;
 use App\Models\HeStudentSubject;
 
@@ -27,6 +27,15 @@ class HeAdmission extends Model
         'created_by',
         'updated_by',
         'deleted_by',
+    ];
+
+    protected $casts = [
+        'admission_year' => 'integer',
+        'current_semester' => 'integer',
+        'status' => 'string',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
 
     protected static function booted()
@@ -76,40 +85,139 @@ class HeAdmission extends Model
     }
 
     // Scopes
-    public function scopeActive(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    public function scopeActive(Builder $query): Builder
     {
         return $query->whereIn('status', ['Active', 'Admitted', 'active', 'admitted'])
-                     ->whereNotIn('status', ['Struck Off', 'struck_off', 'Graduated', 'Dropped']);
+                     ->whereNotIn('status', ['Struck Off', 'struck_off', 'Graduated', 'Dropped', 'Suspended']);
     }
 
-    public function scopeForBatch(\Illuminate\Database\Eloquent\Builder $query, int $year): \Illuminate\Database\Eloquent\Builder
+    public function scopeStruckOff(Builder $query): Builder
+    {
+        return $query->whereIn('status', ['Struck Off', 'struck_off']);
+    }
+
+    public function scopeForBatch(Builder $query, int $year): Builder
     {
         return $query->where('admission_year', $year);
     }
 
-    public function scopeForProgram(\Illuminate\Database\Eloquent\Builder $query, int $programId): \Illuminate\Database\Eloquent\Builder
+    public function scopeForProgram(Builder $query, int $programId): Builder
     {
         return $query->where('program_id', $programId);
     }
 
-    public function scopeForSemester(\Illuminate\Database\Eloquent\Builder $query, int $semester): \Illuminate\Database\Eloquent\Builder
+    public function scopeForSemester(Builder $query, int $semester): Builder
     {
         return $query->where('current_semester', $semester);
     }
 
-    public function getStatusColor(): string
+    // Accessors
+    public function getIsActiveAttribute(): bool
     {
-        return match($this->status) {
-            'Active' => 'success',
-            'Graduated' => 'primary',
-            'Dropped' => 'danger',
-            'Suspended' => 'warning',
-            'Admitted' => 'info',
-            'Applied' => 'secondary',
-            default => 'dark'
-        };
+        return in_array($this->status, ['Active', 'Admitted', 'active', 'admitted']);
     }
 
+    public function getIsGraduatedAttribute(): bool
+    {
+        return $this->status === 'Graduated';
+    }
+
+    public function getIsStruckOffAttribute(): bool
+    {
+        return in_array(strtolower($this->status), ['struck off', 'struck_off']);
+    }
+
+    public function getRollNumberAttribute(): ?string
+    {
+        return $this->roll_no;
+    }
+
+    public function getAcademicLevelAttribute(): string
+    {
+        return 'Semester ' . $this->current_semester;
+    }
+
+    public function getStatusColor(): string
+    {
+        return \App\Enums\AdmissionStatus::badgeFor($this->status);
+    }
+
+    public function getStatusBadgeAttribute(): string
+    {
+        return \App\Enums\AdmissionStatus::badgeFor($this->status);
+    }
+
+    // Domain State Transitions
+    public function strikeOff(?int $userId = null): void
+    {
+        $this->update([
+            'status'     => 'Struck Off',
+            'updated_by' => $userId,
+        ]);
+    }
+
+    public function activate(?int $userId = null): void
+    {
+        $this->update([
+            'status'     => 'Active',
+            'updated_by' => $userId,
+        ]);
+    }
+
+    public function graduate(?int $userId = null): void
+    {
+        $this->update([
+            'status'     => 'Graduated',
+            'updated_by' => $userId,
+        ]);
+    }
+
+    public function drop(?int $userId = null): void
+    {
+        $this->update([
+            'status'     => 'Dropped',
+            'updated_by' => $userId,
+        ]);
+    }
+
+    public function canPromoteToNextSemester(): bool
+    {
+        return in_array($this->status, ['Active', 'Admitted', 'active', 'admitted']);
+    }
+
+    /**
+     * Promote student to next semester or graduate if past final semester.
+     */
+    public function promoteToNextSemester(?int $targetSemester = null, ?int $userId = null): bool
+    {
+        if (!$this->canPromoteToNextSemester()) {
+            return false;
+        }
+
+        if ($targetSemester) {
+            $this->update([
+                'current_semester' => $targetSemester,
+                'status'           => 'Active',
+                'updated_by'       => $userId,
+            ]);
+            return true;
+        }
+
+        if ($this->current_semester >= 8) {
+            $this->graduate($userId);
+            return true;
+        }
+
+        $this->update([
+            'current_semester' => $this->current_semester + 1,
+            'status'           => 'Active',
+            'updated_by'       => $userId,
+        ]);
+
+        return true;
+    }
+
+    // Relationships
     public function student(): BelongsTo
     {
         return $this->belongsTo(Student::class)->withTrashed();

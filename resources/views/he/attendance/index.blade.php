@@ -10,6 +10,25 @@
         </div>
     </div>
 
+    @if(isset($isTodayOff) && $isTodayOff)
+        <div class="alert alert-warning border-start border-warning border-4 shadow-sm mb-4">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-umbrella-beach fa-2x text-warning me-3"></i>
+                <div>
+                    <h5 class="alert-heading mb-1 fw-bold">Attendance Closed Today</h5>
+                    <p class="mb-0">Today is marked as <strong>{{ $todayOffReason }}</strong>. BS/ADP classes are not held and attendance marking is suspended for today.</p>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if(session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+        <div class="alert alert-danger">{{ session('error') }}</div>
+    @endif
+
     @if($myClasses->count() > 0)
         <div class="row">
             @foreach($myClasses as $class)
@@ -43,14 +62,20 @@
                             </ul>
                         </div>
                         <div class="card-footer bg-white">
-                            <a href="{{ route('he.attendance.create', [
-                                'subject_id' => $class->subject_id,
-                                'program_id' => $class->program_id,
-                                'semester' => $class->current_semester,
-                                'year' => $class->admission_year
-                            ]) }}" class="btn btn-success w-100">
-                                <i class="fas fa-clipboard-check me-1"></i>Mark Attendance
-                            </a>
+                            @if(isset($isTodayOff) && $isTodayOff)
+                                <button class="btn btn-secondary w-100" disabled title="Attendance cannot be marked today ({{ $todayOffReason }})">
+                                    <i class="fas fa-ban me-1"></i> Closed ({{ str_contains($todayOffReason, 'Sunday') ? 'Sunday' : 'Holiday' }})
+                                </button>
+                            @else
+                                <a href="{{ route('he.attendance.create', [
+                                    'subject_id' => $class->subject_id,
+                                    'program_id' => $class->program_id,
+                                    'semester' => $class->current_semester,
+                                    'year' => $class->admission_year
+                                ]) }}" class="btn btn-success w-100">
+                                    <i class="fas fa-clipboard-check me-1"></i>Mark Attendance
+                                </a>
+                            @endif
                         </div>
                     </div>
                 </div>

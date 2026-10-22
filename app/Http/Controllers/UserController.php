@@ -288,7 +288,7 @@ class UserController extends Controller
             'student_ids.*' => 'exists:students,id',
         ]);
 
-        $students = Student::with(['admissions', 'contact', 'user'])->findMany($request->student_ids);
+        $students = Student::with(['admissions', 'heAdmissions', 'contact', 'user'])->findMany($request->student_ids);
         $role = Roles::where('name', 'student')->first();
         
         if (!$role) {
@@ -301,13 +301,13 @@ class UserController extends Controller
         foreach ($students as $student) {
             if ($student->user) continue;
 
-            $admission = $student->admissions->first();
-            if (!$admission || !$admission->college_roll_no) {
+            $rollNo = $student->admissions->first()?->college_roll_no ?? $student->heAdmissions->first()?->roll_no;
+            if (!$rollNo) {
                 $errors[] = "Student {$student->id} lacks a roll number.";
                 continue;
             }
 
-            $username = strtolower(str_replace(' ', '', $admission->college_roll_no));
+            $username = strtolower(str_replace(' ', '', $rollNo));
             $email = $student->contact->email ?? $username . '@rsclosetor.com';
 
             // Simple conflict check

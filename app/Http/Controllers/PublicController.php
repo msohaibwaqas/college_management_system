@@ -685,18 +685,20 @@ class PublicController extends Controller
 
     public function downloadStudentVoucher(\App\Models\FeeVoucher $voucher)
     {
-        $voucher->load(['items', 'student.admissions', 'student.heAdmissions', 'application']);
+        $voucher->load(['items', 'student.admissions', 'student.heAdmissions', 'student.attribute', 'student.contact', 'application']);
         $settings = \App\Models\InstituteSetting::getSettings();
+        $printable = \App\Services\Voucher\VoucherFactory::create($voucher, $settings);
         
-        return view('pdfs.fee-voucher', compact('voucher', 'settings'));
+        return view('pdfs.fee-voucher', ['voucher' => $printable, 'settings' => $settings]);
     }
 
     public function downloadFineVoucher(\App\Models\StudentFine $fine)
     {
-        $fine->load(['student.father', 'admission', 'fineRule']);
+        $fine->load(['student.father', 'student.attribute', 'student.contact', 'student.admissions', 'student.vouchers', 'admission.student', 'fineRule']);
         $settings = \App\Models\InstituteSetting::getSettings();
+        $printable = \App\Services\Voucher\VoucherFactory::create($fine, $settings);
         
-        return view('pdfs.fine-voucher', compact('fine', 'settings'));
+        return view('pdfs.fee-voucher', ['voucher' => $printable, 'settings' => $settings]);
     }
 
 

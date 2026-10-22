@@ -134,16 +134,27 @@
             font-style: italic;
             line-height: 1.2;
         }
+        @media print {
+            body { padding: 0; }
+            .no-print { display: none !important; }
+            @page {
+                size: A4 landscape;
+                margin: 6mm;
+            }
+        }
     </style>
 </head>
 <body>
     @php
-        $settings = \App\Models\InstituteSetting::getSettings();
+        $settings = $settings ?? \App\Models\InstituteSetting::getSettings();
+        if (!($voucher instanceof \App\Contracts\PrintableVoucherInterface)) {
+            $voucher = \App\Services\Voucher\VoucherFactory::create($voucher, $settings);
+        }
         $copies = ['Bank Copy', 'College Copy', 'Student Copy'];
         
-        $logoPath = public_path($settings->logo_path);
+        $logoPath = $settings->logo_path ? public_path($settings->logo_path) : null;
         $logoBase64 = "";
-        if ($settings->logo_path && file_exists($logoPath)) {
+        if ($logoPath && file_exists($logoPath)) {
             $imageData = file_get_contents($logoPath);
             if ($imageData) {
                 $logoBase64 = base64_encode($imageData);
@@ -188,8 +199,8 @@
                 <table style="width: 100%; border-collapse: collapse; border: 0;">
                     <tr>
                         <td style="width: 33.3%;"><strong>Voucher #</strong><br>{{ $voucher->voucher_number }}</td>
-                        <td style="width: 33.3%; text-align: center;"><strong>Issue Date</strong><br>{{ $voucher->issue_date->format('d-M-Y') }}</td>
-                        <td style="width: 33.3%; text-align: right;"><strong>Due Date</strong><br>{{ $voucher->due_date->format('d-M-Y') }}</td>
+                        <td style="width: 33.3%; text-align: center;"><strong>Issue Date</strong><br>{{ $voucher->issue_date ? $voucher->issue_date->format('d-M-Y') : now()->format('d-M-Y') }}</td>
+                        <td style="width: 33.3%; text-align: right;"><strong>Due Date</strong><br>{{ $voucher->due_date ? $voucher->due_date->format('d-M-Y') : now()->addDays(15)->format('d-M-Y') }}</td>
                     </tr>
                 </table>
             </div>
@@ -211,6 +222,12 @@
                 </table>
             </div>
 
+            @if($voucher->getStatusStamp())
+            <div style="border: 1.5px solid #198754; color: #198754; font-weight: bold; font-size: 10px; text-align: center; padding: 2px; margin-bottom: 6px; letter-spacing: 1px;">
+                {{ $voucher->getStatusStamp() }}
+            </div>
+            @endif
+
             <table class="fee-table">
                 <thead>
                     <tr>
@@ -221,8 +238,21 @@
                 <tbody>
                     @foreach($voucher->items as $item)
                     <tr>
-                        <td>{{ $item->name }}</td>
-                        <td style="text-align: right;">{{ number_format($item->amount) }}</td>
+                        <td>
+                            {{ $item->name }}
+                            @if(!empty($item->detail))
+                                <div style="font-size: 8.5px; color: #555; margin-top: 1px;">{{ $item->detail }}</div>
+                            @endif
+                        </td>
+                        <td style="text-align: right;">
+                            @if(is_object($item) && method_exists($item, 'getFormattedAmount'))
+                                {{ $item->getFormattedAmount() }}
+                            @elseif(is_object($item) && isset($item->amount) && $item->amount < 0)
+                                - {{ number_format(abs($item->amount)) }}
+                            @else
+                                {{ number_format(is_object($item) ? $item->amount : $item['amount']) }}
+                            @endif
+                        </td>
                     </tr>
                     @endforeach
                     <tr class="total-row">
@@ -234,15 +264,15 @@
 
             <div class="section-box" style="font-size: 12px;">
                 <strong>Amount in Words:</strong><br>
-                {{ numberToWords($voucher->amount) }} Rupees Only
+                {{ $voucher->getAmountInWords() }}
             </div>
 
             <div class="section-box" style="font-size: 8px;">
                 <strong>Instructions:</strong>
                 <ul style="margin: 0; padding-left: 12px;">
-                    <li>Pay fee on or before due date.</li>
-                    <li>Fee once paid is non-refundable.</li>
-                    <li>Please keep this copy for your record.</li>
+                    @foreach($voucher->getInstructions() as $instruction)
+                        <li>{{ $instruction }}</li>
+                    @endforeach
                 </ul>
             </div>
 

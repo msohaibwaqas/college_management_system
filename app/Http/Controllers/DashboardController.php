@@ -13,6 +13,7 @@ use App\Models\BsSubject;
 use App\Models\FeeVoucher;
 use App\Models\AdmissionApplication;
 use App\Models\StudentTeacherSubject;
+use App\Services\AcademicCalendarService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Auth;
@@ -106,7 +107,8 @@ class DashboardController extends Controller
                 ->orderBy('he_admissions.admission_year', 'desc')
                 ->get();
 
-            return view('dashboards.teacher', compact('myClasses', 'myHeClasses', 'staff'));
+            [$isTodayOff, $todayOffReason] = app(AcademicCalendarService::class)->checkIfSundayOrHoliday(now()->toDateString());
+            return view('dashboards.teacher', compact('myClasses', 'myHeClasses', 'staff', 'isTodayOff', 'todayOffReason'));
         } elseif ($activeRole === 'clerk') {
             $hsscStudents = Admissions::whereIn('status', ['Active', 'Admitted'])->count();
             $bsStudents = HeAdmission::whereIn('status', ['Active', 'Admitted'])->count();

@@ -11,6 +11,18 @@
         </a>
     </div>
 
+    @if(isset($isTodayOff) && $isTodayOff)
+        <div class="alert alert-warning border-start border-warning border-4 shadow-sm mb-4">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-umbrella-beach fa-2x text-warning me-3"></i>
+                <div>
+                    <h5 class="alert-heading mb-1 fw-bold">Attendance Closed Today</h5>
+                    <p class="mb-0">Today is marked as <strong>{{ $todayOffReason }}</strong>. Classes are not held and attendance marking is suspended for today.</p>
+                </div>
+            </div>
+        </div>
+    @endif
+
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif
@@ -47,13 +59,19 @@
                                 @endif
                             </td>
                             <td>
-                                <a href="{{ route('attendance.create', [
-                                    'subject_id' => $class->subject_id, 
-                                    'class' => $class->current_class, 
-                                    'year' => $class->admission_year
-                                ]) }}" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-check-circle me-1"></i> Mark Attendance
-                                </a>
+                                @if(isset($isTodayOff) && $isTodayOff)
+                                    <button class="btn btn-secondary btn-sm" disabled title="Attendance cannot be marked today ({{ $todayOffReason }})">
+                                        <i class="fas fa-ban me-1"></i> Closed ({{ str_contains($todayOffReason, 'Sunday') ? 'Sunday' : 'Holiday' }})
+                                    </button>
+                                @else
+                                    <a href="{{ route('attendance.create', [
+                                        'subject_id' => $class->subject_id, 
+                                        'class' => $class->current_class, 
+                                        'year' => $class->admission_year
+                                    ]) }}" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-check-circle me-1"></i> Mark Attendance
+                                    </a>
+                                @endif
                             </td>
                         </tr>
                         @empty

@@ -25,15 +25,16 @@ use App\Http\Requests\Student\StoreStudentRequest;
 use App\Http\Requests\Student\UpdateStudentRequest;
 use App\Actions\Student\CreateStudentAction;
 use App\Actions\Student\UpdateStudentAction;
+use App\Services\Student\StudentBulkOperationService;
+use App\Services\Export\StudentExportService;
 
 class StudentController extends Controller
 {
-    protected FileUploadService $fileUploadService;
-
-    public function __construct(FileUploadService $fileUploadService)
-    {
-        $this->fileUploadService = $fileUploadService;
-    }
+    public function __construct(
+        protected FileUploadService $fileUploadService,
+        protected StudentBulkOperationService $bulkOperationService,
+        protected StudentExportService $exportService
+    ) {}
 
     /**
      * List all students
@@ -385,24 +386,14 @@ class StudentController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $studentIds = $request->student_ids;
-            
-            // Optimization: Use single query for bulk delete instead of looping
-            $deletedCount = Student::whereIn('id', $studentIds)->delete();
-
-            DB::commit();
+            $deletedCount = $this->bulkOperationService->deleteStudents($request->student_ids);
 
             return response()->json([
                 'success' => true,
                 'message' => "Successfully deleted {$deletedCount} student(s).",
                 'deleted_count' => $deletedCount
             ]);
-
         } catch (\Exception $e) {
-            DB::rollBack();
-            
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred while deleting students: ' . $e->getMessage()
@@ -418,38 +409,24 @@ class StudentController extends Controller
         $request->validate([
             'student_ids' => 'required|array|min:1',
             'student_ids.*' => 'required|integer|exists:students,id',
-            'status' => 'required|in:Applied,Admitted,Active,Graduated,Dropped,Suspended'
+            'status' => 'required|in:Active,Struck Off,Graduated,Dropped,Suspended'
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $studentIds = $request->student_ids;
-            $status = $request->status;
-            $updatedCount = 0;
-
-            // Update admissions status for selected students
-            // We assume we are updating their *active* or most recent admission if they have multiple, 
-            // but typically a student has one main admission record we care about for status.
-            // A safer approach is to update all non-graduated admissions or just the latest one.
-            // Given the context, we'll update the admission record associated with the current year or just all for simplicity 
-            // as usually students have one active admission track.
-            
-            // Better approach: Update the admission records where student_id is in the list.
-            $updatedCount = Admissions::whereIn('student_id', $studentIds)
-                ->update(['status' => $status]);
-
-            DB::commit();
+            $updatedCount = $this->bulkOperationService->updateStatus(
+                $request->student_ids,
+                $request->status,
+                [],
+                'all',
+                Auth::id()
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => "Successfully updated status for {$updatedCount} admission record(s).",
                 'updated_count' => $updatedCount
             ]);
-
         } catch (\Exception $e) {
-            DB::rollBack();
-            
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred while updating status: ' . $e->getMessage()
@@ -468,34 +445,14 @@ class StudentController extends Controller
         ]);
 
         try {
-            DB::beginTransaction();
-
-            $studentIds = $request->student_ids;
-            $promotedCount = 0;
-
-            // Find Class 11 admissions for these students
-            $admissions = Admissions::whereIn('student_id', $studentIds)
-                ->where('current_class', '11')
-                ->whereIn('status', ['Admitted', 'Active', 'admitted', 'active'])
-                ->get();
-
-            foreach ($admissions as $admission) {
-                if ($admission->promoteToClass12()) {
-                    $promotedCount++;
-                }
-            }
-
-            DB::commit();
+            $promotedCount = $this->bulkOperationService->promoteHssc($request->student_ids, Auth::id());
 
             return response()->json([
                 'success' => true,
                 'message' => "Successfully promoted {$promotedCount} student(s) to Class 12.",
                 'promoted_count' => $promotedCount
             ]);
-
         } catch (\Exception $e) {
-            DB::rollBack();
-            
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred while promoting students: ' . $e->getMessage()
@@ -534,50 +491,7 @@ class StudentController extends Controller
             });
         }
 
-        $students = $query->get();
-
-        $headers = [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="students_export_' . date('Y-m-d_His') . '.csv"',
-        ];
-
-        $callback = function() use ($students) {
-            $file = fopen('php://output', 'w');
-            
-            // Headers
-            fputcsv($file, [
-                'Student Name',
-                'Father Name',
-                'College Roll No',
-                'BISE Roll 11',
-                'BISE Roll 12',
-                'Admission Year',
-                'Elective 1',
-                'Elective 2',
-                'Elective 3'
-            ]);
-
-            foreach ($students as $student) {
-                $admission = $student->admissions->first();
-                $electives = $student->electives->sortBy('sequence');
-                
-                fputcsv($file, [
-                    $student->first_name . ' ' . $student->last_name,
-                    $student->father ? $student->father->name : '',
-                    $admission ? $admission->college_roll_no : '',
-                    $admission ? $admission->bise_roll_11 : '',
-                    $admission ? $admission->bise_roll_12 : '',
-                    $admission ? $admission->admission_year : '',
-                    $electives->get(0) ? $electives->get(0)->subject->name : '',
-                    $electives->get(1) ? $electives->get(1)->subject->name : '',
-                    $electives->get(2) ? $electives->get(2)->subject->name : '',
-                ]);
-            }
-            
-            fclose($file);
-        };
-
-        return response()->stream($callback, 200, $headers);
+        return $this->exportService->exportHssc($query->get());
     }
 
     /**

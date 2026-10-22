@@ -239,12 +239,11 @@
                     <div class="col-md-3">
                         <label>Status</label>
                         <select name="status" class="form-control" required>
-                            <option value="Applied" {{ old('status', $admission->status ?? '')=='Applied' ? 'selected':'' }}>Applied</option>
-                            <option value="Admitted" {{ old('status', $admission->status ?? '')=='Admitted' ? 'selected':'' }}>Admitted</option>
-                            <option value="Active" {{ old('status', $admission->status ?? '')=='Active' ? 'selected':'' }}>Active</option>
-                            <option value="Suspended" {{ old('status', $admission->status ?? '')=='Suspended' ? 'selected':'' }}>Suspended</option>
-                            <option value="Dropped" {{ old('status', $admission->status ?? '')=='Dropped' ? 'selected':'' }}>Dropped</option>
+                            <option value="Active" {{ in_array(old('status', $admission->status ?? ''), ['Active', 'Admitted', 'active']) ? 'selected':'' }}>Active</option>
+                            <option value="Struck Off" {{ in_array(old('status', $admission->status ?? ''), ['Struck Off', 'struck_off']) ? 'selected':'' }}>Struck Off</option>
                             <option value="Graduated" {{ old('status', $admission->status ?? '')=='Graduated' ? 'selected':'' }}>Graduated</option>
+                            <option value="Dropped" {{ old('status', $admission->status ?? '')=='Dropped' ? 'selected':'' }}>Dropped</option>
+                            <option value="Suspended" {{ old('status', $admission->status ?? '')=='Suspended' ? 'selected':'' }}>Suspended</option>
                         </select>
                     </div>
                 </div>

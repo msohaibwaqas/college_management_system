@@ -17,31 +17,34 @@ class AcademicCalendarService
     public function checkIfSundayOrHoliday(string $dateString): array
     {
         $carbonDate = Carbon::parse($dateString);
+        $date = $carbonDate->format('Y-m-d');
 
         if ($carbonDate->isSunday()) {
             return [true, "Sunday (Weekly Off Day)"];
         }
 
-        $publicHoliday = PublicHoliday::whereDate('date', $dateString)->where('is_active', true)->first();
+        $publicHoliday = PublicHoliday::whereDate('date', $date)->where('is_active', true)->first();
         if ($publicHoliday) {
             return [true, "Public Holiday: {$publicHoliday->title}"];
         }
 
-        $holidayAnnouncement = Announcement::where(function ($q) use ($dateString) {
-            $q->where(function ($sub) use ($dateString) {
+        $holidayAnnouncement = Announcement::where(function ($q) use ($date) {
+            $q->where(function ($sub) use ($date) {
                 $sub->where('is_holiday', true)
-                    ->whereDate('holiday_date', $dateString);
-            })->orWhere(function ($sub) use ($dateString) {
+                    ->whereDate('holiday_date', $date);
+            })->orWhere(function ($sub) use ($date) {
+                $sub->where('is_holiday', true)
+                    ->whereNull('holiday_date')
+                    ->whereDate('scheduled_at', $date);
+            })->orWhere(function ($sub) use ($date) {
                 $sub->where(function ($kw) {
                     $kw->where('title', 'LIKE', '%holiday%')
-                       ->orWhere('body', 'LIKE', '%holiday%')
                        ->orWhere('title', 'LIKE', '%vacation%')
                        ->orWhere('title', 'LIKE', '%off day%');
                 })
-                ->where(function ($dt) use ($dateString) {
-                    $dt->whereDate('holiday_date', $dateString)
-                       ->orWhereDate('scheduled_at', $dateString)
-                       ->orWhereDate('created_at', $dateString);
+                ->where(function ($dt) use ($date) {
+                    $dt->whereDate('holiday_date', $date)
+                       ->orWhereDate('scheduled_at', $date);
                 });
             });
         })->first();
@@ -51,5 +54,13 @@ class AcademicCalendarService
         }
 
         return [false, null];
+    }
+
+    /**
+     * Helper to simply check if a date is off.
+     */
+    public function isOffDay(string $dateString): bool
+    {
+        return $this->checkIfSundayOrHoliday($dateString)[0];
     }
 }

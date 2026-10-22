@@ -385,8 +385,10 @@
                                 <td><span class="badge badge-custom badge-class">Class {{ $admission->current_class }}</span></td>
                                 <td>{{ $admission->admission_year }}</td>
                                 <td>
-                                    @if($admission->status == 'Active')
+                                    @if($admission->status == 'Active' || $admission->status == 'Admitted')
                                         <span class="badge badge-custom badge-active">Active</span>
+                                    @elseif($admission->status == 'Struck Off' || $admission->status == 'struck_off')
+                                        <span class="badge badge-custom bg-danger text-white">Struck Off</span>
                                     @elseif($admission->status == 'Graduated')
                                         <span class="badge badge-custom badge-graduated">Graduated</span>
                                     @elseif($admission->status == 'Dropped' || $admission->status == 'Left')

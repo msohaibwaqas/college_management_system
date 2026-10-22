@@ -130,7 +130,7 @@ class AdmitHeApplicantAction
                 'roll_no' => null,
                 'admission_year' => $application->admission_year,
                 'current_semester' => 1,
-                'status' => 'Admitted',
+                'status' => 'Active',
                 'created_by' => $userId,
                 'updated_by' => $userId,
             ]);

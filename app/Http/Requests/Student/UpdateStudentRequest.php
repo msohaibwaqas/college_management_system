@@ -115,7 +115,7 @@ class UpdateStudentRequest extends FormRequest
             ],
             'hssc_reg_no'                 => 'required|string|unique:admissions,hssc_reg_no,' . $admissionId,
             'current_class'               => 'nullable|string',
-            'status'                      => 'required|in:Applied,Admitted,Active,Graduated,Dropped,Suspended,Struck Off,struck_off',
+            'status'                      => 'required|in:Active,Struck Off,Graduated,Dropped,Suspended,Admitted,struck_off',
             'ssc.bise_id'                 => 'required|exists:bise_records,id',
             'ssc.roll_no'                 => 'required|string',
             'ssc.reg_no'                  => 'required|string',

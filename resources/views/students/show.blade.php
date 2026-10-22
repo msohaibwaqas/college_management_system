@@ -200,7 +200,7 @@
                         </tr>
                         <tr>
                             <th>Status:</th>
-                            <td><span class="badge bg-success">{{ $admission->status ?? 'N/A' }}</span></td>
+                            <td><span class="badge bg-{{ $admission->status_badge ?? 'secondary' }}">{{ $admission->status ?? 'N/A' }}</span></td>
                         </tr>
                     </table>
                 </div>

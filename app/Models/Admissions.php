@@ -94,7 +94,7 @@ class Admissions extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->whereIn('status', ['Active', 'Admitted', 'active', 'admitted'])
-                     ->whereNotIn('status', ['Struck Off', 'struck_off', 'Graduated', 'Dropped']);
+                     ->whereNotIn('status', ['Struck Off', 'struck_off', 'Graduated', 'Dropped', 'Suspended']);
     }
 
     public function scopeStruckOff(Builder $query): Builder
@@ -150,6 +150,11 @@ class Admissions extends Model
         return $this->current_class === '11' || $this->current_class === '12';
     }
 
+    public function getIsActiveAttribute(): bool
+    {
+        return in_array($this->status, ['Active', 'Admitted', 'active']);
+    }
+
     public function getIsGraduatedAttribute(): bool
     {
         return $this->status === 'Graduated';
@@ -157,12 +162,17 @@ class Admissions extends Model
 
     public function getIsAdmittedAttribute(): bool
     {
-        return in_array($this->status, ['Admitted', 'Active', 'Graduated']);
+        return in_array($this->status, ['Active', 'Admitted', 'Graduated']);
     }
 
     public function getIsStruckOffAttribute(): bool
     {
         return in_array(strtolower($this->status), ['struck off', 'struck_off']);
+    }
+
+    public function getStatusBadgeAttribute(): string
+    {
+        return \App\Enums\AdmissionStatus::badgeFor($this->status);
     }
 
     // Mutators

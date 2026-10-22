@@ -6,9 +6,14 @@ use App\Exceptions\AttendanceRestrictedException;
 use App\Models\Attendance;
 use App\Models\AttendanceReminder;
 use App\Models\User;
+use App\Services\AcademicCalendarService;
 
 class MarkAttendanceAction
 {
+    public function __construct(
+        protected AcademicCalendarService $academicCalendarService
+    ) {}
+
     /**
      * Check if marking attendance is restricted for the given user, subject, date, and class.
      * Returns null if allowed, or an error message string if restricted.
@@ -26,22 +31,25 @@ class MarkAttendanceAction
             return null;
         }
 
-        // Regular teachers have date, day, and time restrictions
+        // Regular teachers have date, day, holiday, and time restrictions
         if ($user->isTeacher()) {
+            // Check if the date is a Sunday or Holiday (Public or Announced)
+            [$isOff, $reason] = $this->academicCalendarService->checkIfSundayOrHoliday($date);
+            if ($isOff) {
+                return "Attendance cannot be marked on {$date} because it is a {$reason}.";
+            }
+
             $today = date('Y-m-d');
-            $isPastOrSunday = ($date !== $today) || ((int) date('N', strtotime($date)) === 7);
+            $isPastDate = ($date !== $today);
             $isPastCutoff = ((int) date('H') >= 23);
 
-            if ($isPastOrSunday || $isPastCutoff) {
+            if ($isPastDate || $isPastCutoff) {
                 $staffId = $user->staff?->id;
                 $hasReminder = AttendanceReminder::hasUnused($staffId, $subjectId, $date, $class, $year, $section);
 
                 if (!$hasReminder) {
                     if ($date !== $today) {
                         return 'Teachers can only mark attendance for the current date unless granted permission by the Principal via a reminder. If you received a reminder, it may have already been used.';
-                    }
-                    if ((int) date('N', strtotime($date)) === 7) {
-                        return 'Attendance cannot be marked on Sundays.';
                     }
                     if ((int) date('H') >= 23) {
                         return 'Attendance marking is closed after 11:00 PM.';

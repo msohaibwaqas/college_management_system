@@ -7,6 +7,7 @@ use App\Exceptions\AttendanceRestrictedException;
 use App\Http\Requests\Attendance\MarkAttendanceRequest;
 use App\Models\Attendance;
 use App\Models\Subject;
+use App\Services\AcademicCalendarService;
 use App\Services\AttendanceCalculatorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,7 +17,8 @@ class AttendanceController extends Controller
 {
     public function __construct(
         protected AttendanceCalculatorService $attendanceCalculatorService,
-        protected MarkAttendanceAction $markAttendanceAction
+        protected MarkAttendanceAction $markAttendanceAction,
+        protected AcademicCalendarService $academicCalendarService
     ) {}
 
     public function index()
@@ -30,6 +32,9 @@ class AttendanceController extends Controller
         if (!$staff) {
             return redirect()->route('dashboard')->with('error', 'No staff record found.');
         }
+
+        $today = now()->toDateString();
+        [$isTodayOff, $todayOffReason] = $this->academicCalendarService->checkIfSundayOrHoliday($today);
 
         $myClasses = DB::table('student_teacher_subjects')
             ->join('subjects', 'student_teacher_subjects.subject_id', '=', 'subjects.id')
@@ -64,7 +69,7 @@ class AttendanceController extends Controller
             ->orderBy('admissions.admission_year', 'desc')
             ->get();
 
-        return view('attendance.index', compact('myClasses'));
+        return view('attendance.index', compact('myClasses', 'isTodayOff', 'todayOffReason'));
     }
 
     public function create(Request $request)

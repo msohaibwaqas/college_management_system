@@ -6,11 +6,16 @@ use App\Models\Staff;
 use App\Models\StaffDailyAttendance;
 use App\Models\PublicHoliday;
 use App\Models\LeaveApplication;
+use App\Services\AcademicCalendarService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
 class StaffAttendanceController extends Controller
 {
+    public function __construct(
+        protected AcademicCalendarService $academicCalendarService
+    ) {}
+
     public function index(Request $request)
     {
         $date = $request->input('date', date('Y-m-d'));
@@ -19,6 +24,19 @@ class StaffAttendanceController extends Controller
         $holiday = PublicHoliday::where('is_active', true)
                                 ->whereDate('date', $parsedDate->toDateString())
                                 ->first();
+
+        if (!$holiday) {
+            [$isOff, $reason] = $this->academicCalendarService->checkIfSundayOrHoliday($parsedDate->toDateString());
+            if ($isOff) {
+                $holiday = (object) [
+                    'id' => null,
+                    'title' => $reason,
+                    'type' => str_contains($reason, 'Sunday') ? 'Weekly Off' : 'Holiday',
+                    'description' => $reason,
+                    'is_active' => true,
+                ];
+            }
+        }
 
         // Get all active staff
         $staffMembers = Staff::where('status', 'active')->orderBy('id')->get();

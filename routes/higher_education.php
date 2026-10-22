@@ -28,6 +28,10 @@ Route::prefix('he')->middleware('role:admin,principal,clerk,bs_clerk,bs_admin,te
         Route::resource('programs', ProgramController::class);
         Route::resource('bs-subjects', BsSubjectController::class);
         Route::get('admissions/search-student', [HeAdmissionController::class, 'searchStudent'])->name('admissions.search-student');
+        Route::get('admissions/export', [HeAdmissionController::class, 'export'])->name('admissions.export');
+        Route::post('admissions/bulk-delete', [HeAdmissionController::class, 'bulkDelete'])->name('admissions.bulk-delete');
+        Route::post('admissions/bulk-status-update', [HeAdmissionController::class, 'bulkStatusUpdate'])->name('admissions.bulk-status-update');
+        Route::post('admissions/bulk-promote', [HeAdmissionController::class, 'bulkPromote'])->name('admissions.bulk-promote');
         Route::resource('admissions', HeAdmissionController::class);
         Route::get('semesters/available-subjects', [SemesterController::class, 'availableSubjects'])->name('semesters.available-subjects');
         Route::resource('semesters', SemesterController::class);

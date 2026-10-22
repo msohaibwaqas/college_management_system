@@ -63,6 +63,13 @@ class GateAttendanceController extends Controller
         $studentId = $student->id; // Use clear ID for subsequent operations
 
         $today = Carbon::today();
+        [$isOff, $reason] = app(\App\Services\AcademicCalendarService::class)->checkIfSundayOrHoliday($today->toDateString());
+        if ($isOff) {
+            return response()->json([
+                'success' => false,
+                'message' => "College is closed today ({$reason}). Gate attendance cannot be recorded.",
+            ]);
+        }
         $currentTime = Carbon::now()->format('H:i:s');
 
         // Check if attendance already exists for today

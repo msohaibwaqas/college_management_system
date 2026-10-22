@@ -5,9 +5,14 @@ namespace App\Actions\Attendance;
 use App\Exceptions\AttendanceRestrictedException;
 use App\Models\HeAttendance;
 use App\Models\User;
+use App\Services\AcademicCalendarService;
 
 class MarkHeAttendanceAction
 {
+    public function __construct(
+        protected AcademicCalendarService $academicCalendarService
+    ) {}
+
     /**
      * Check if marking BS attendance is restricted for the given user and date.
      * Returns null if allowed, or an error message string if restricted.
@@ -20,12 +25,15 @@ class MarkHeAttendanceAction
         }
 
         if ($user->isTeacher()) {
+            // Check if the date is a Sunday or Holiday (Public or Announced)
+            [$isOff, $reason] = $this->academicCalendarService->checkIfSundayOrHoliday($date);
+            if ($isOff) {
+                return "Attendance cannot be marked on {$date} because it is a {$reason}.";
+            }
+
             $today = date('Y-m-d');
             if ($date !== $today) {
                 return 'Teachers can only mark attendance for the current date.';
-            }
-            if ((int) date('N', strtotime($date)) === 7) {
-                return 'Attendance cannot be marked on Sundays.';
             }
             if ((int) date('H') >= 23) {
                 return 'Attendance marking is closed after 11:00 PM.';

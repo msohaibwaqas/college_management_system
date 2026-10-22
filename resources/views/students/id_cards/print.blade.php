@@ -401,6 +401,21 @@
         @endif
 
         @foreach($students as $admission)
+        @php
+            $isDto = $admission instanceof \App\DTOs\IdCardItemDto;
+            $fullName = $isDto ? $admission->fullName : trim(($admission->student->first_name ?? 'Unknown') . ' ' . ($admission->student->last_name ?? ''));
+            $rollNo = $isDto ? $admission->rollNo : ($admission->college_roll_no ?? $admission->roll_no ?? 'N/A');
+            $fatherName = $isDto ? $admission->fatherName : ($admission->student?->father?->name ?? null);
+            $courseTitle = $isDto ? $admission->courseTitle : (
+                ($admission->student && $admission->student->electives && $admission->student->electives->isNotEmpty())
+                    ? $admission->student->electives->sortBy('sequence')->map(fn($e) => $e->subject?->name)->filter()->implode(', ')
+                    : (isset($admission->program) ? ($admission->program->name . ' (Sem ' . $admission->current_semester . ')') : (($admission->current_class ?? '') == '11' ? 'HSSC Part-I' : (($admission->current_class ?? '') == '12' ? 'HSSC Part-II' : ($admission->current_class ?? 'N/A'))))
+            );
+            $photoUrl = $isDto ? $admission->photoUrl : ($admission->student ? $admission->student->getProfilePictureUrl() : null);
+            $studentId = $isDto ? $admission->studentId : $admission->student_id;
+            $barcodeVal = $isDto ? $admission->barcodeValue : str_pad((string)$studentId, 6, '0', STR_PAD_LEFT);
+            $expiryText = $isDto ? $admission->expiryText : ('AUG ' . (($admission->admission_year ?? date('Y')) + (isset($admission->program) ? ($admission->program->duration_years ?? 4) : 2)));
+        @endphp
         <div class="id-card">
             <!-- Header -->
             <div class="header">
@@ -440,33 +455,29 @@
 
                 <div class="details">
                     <div class="student-name">
-                        {{ $admission->student->first_name ?? 'Unknown' }} {{ $admission->student->last_name ?? '' }}
+                        {{ $fullName }}
                     </div>
                     <div class="role-badge">Student</div>
 
                     <div class="info-grid">
                         <div class="label">Roll No:</div>
-                        <div class="value">{{ $admission->college_roll_no }}</div>
+                        <div class="value">{{ $rollNo }}</div>
 
-                        @if($admission->student && $admission->student->father)
+                        @if($fatherName)
                             <div class="label">Father:</div>
-                            <div class="value text-truncate" style="max-width: 130px;">{{ $admission->student->father->name }}</div>
+                            <div class="value text-truncate" style="max-width: 130px;">{{ $fatherName }}</div>
                         @endif
 
                         <div class="label">Course:</div>
                         <div class="value" style="font-size: 6.8pt; line-height: 1.2;">
-                            @if($admission->student && $admission->student->electives->isNotEmpty())
-                                {{ $admission->student->electives->sortBy('sequence')->map(function($e) { return $e->subject ? $e->subject->name : ''; })->filter()->implode(', ') }}
-                            @else
-                                {{ $admission->current_class == '11' ? 'HSSC Part-I' : ($admission->current_class == '12' ? 'HSSC Part-II' : $admission->current_class) }}
-                            @endif
+                            {{ $courseTitle }}
                         </div>
                     </div>
                 </div>
 
                 <div class="photo-container">
-                    @if($admission->student)
-                        <img src="{{ $admission->student->getProfilePictureUrl() }}" alt="Photo" onerror="this.src='https://via.placeholder.com/150'">
+                    @if($photoUrl)
+                        <img src="{{ $photoUrl }}" alt="Photo" onerror="this.src='https://via.placeholder.com/150'">
                     @else
                         <div style="width:100%;height:100%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;">
                             <i class="fas fa-user text-muted" style="font-size:24px;"></i>
@@ -481,8 +492,7 @@
                     @if($generator)
                         @php
                             try {
-                                $barcodeValue = str_pad((string)$admission->student_id, 6, '0', STR_PAD_LEFT);
-                                echo $generator->getBarcode($barcodeValue, $generator::TYPE_CODE_128, 3.0, 42);
+                                echo $generator->getBarcode($barcodeVal, $generator::TYPE_CODE_128, 3.0, 42);
                             } catch (\Exception $e) {
                                 echo '<span style="font-size:8px;color:red;font-weight:bold;">Barcode Error</span>';
                             }
@@ -490,11 +500,11 @@
                     @else
                         <span style="font-size:9px;color:#666;font-weight:bold;">[Barcode]</span>
                     @endif
-                    <span class="id-number">{{ $admission->student_id }}</span>
+                    <span class="id-number">{{ $studentId }}</span>
                 </div>
                 <div class="expiration">
                     EXPIRES<br>
-                    <strong>AUG {{ $admission->admission_year + 2 }}</strong>
+                    <strong>{{ $expiryText }}</strong>
                 </div>
             </div>
         </div>

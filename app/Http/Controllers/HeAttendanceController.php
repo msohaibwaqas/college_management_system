@@ -8,6 +8,7 @@ use App\Http\Requests\Attendance\MarkHeAttendanceRequest;
 use App\Models\BsSubject;
 use App\Models\HeAttendance;
 use App\Models\HeTeacherAssignment;
+use App\Services\AcademicCalendarService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,8 @@ use Illuminate\Support\Facades\DB;
 class HeAttendanceController extends Controller
 {
     public function __construct(
-        protected MarkHeAttendanceAction $markHeAttendanceAction
+        protected MarkHeAttendanceAction $markHeAttendanceAction,
+        protected AcademicCalendarService $academicCalendarService
     ) {}
 
     /**
@@ -33,6 +35,9 @@ class HeAttendanceController extends Controller
         if (!$staff) {
             return redirect()->route('dashboard')->with('error', 'No staff record found.');
         }
+
+        $today = now()->toDateString();
+        [$isTodayOff, $todayOffReason] = $this->academicCalendarService->checkIfSundayOrHoliday($today);
 
         // Get the teacher's assigned BS/ADP classes
         $myClasses = DB::table('he_teacher_assignments')
@@ -64,7 +69,7 @@ class HeAttendanceController extends Controller
             ->orderBy('he_admissions.current_semester')
             ->get();
 
-        return view('he.attendance.index', compact('myClasses'));
+        return view('he.attendance.index', compact('myClasses', 'isTodayOff', 'todayOffReason'));
     }
 
     /**

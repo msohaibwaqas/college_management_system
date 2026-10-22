@@ -257,10 +257,11 @@ class FineController extends Controller
      */
     public function printSlip(StudentFine $fine)
     {
-        $fine->load(['student.father', 'admission', 'fineRule', 'payerCollector']);
+        $fine->load(['student.father', 'student.attribute', 'student.contact', 'student.admissions', 'student.vouchers', 'admission.student', 'fineRule', 'payerCollector']);
         $settings = \App\Models\InstituteSetting::getSettings();
+        $printable = \App\Services\Voucher\VoucherFactory::create($fine, $settings);
 
-        return view('pdfs.fine-voucher', compact('fine', 'settings'));
+        return view('pdfs.fee-voucher', ['voucher' => $printable, 'settings' => $settings]);
     }
 
     /**

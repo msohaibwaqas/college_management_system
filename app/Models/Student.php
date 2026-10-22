@@ -322,17 +322,27 @@ class Student extends Model
 
     public function getIsCurrentStudentAttribute(): bool
     {
-        return $this->admissions()->whereIn('status', ['Active', 'Admitted'])->exists();
+        return $this->admissions()->whereIn('status', ['Active', 'Admitted'])->exists()
+            || $this->heAdmissions()->whereIn('status', ['Active', 'Admitted'])->exists();
+    }
+
+    public function getIsStruckOffAttribute(): bool
+    {
+        return $this->admissions()->whereIn('status', ['Struck Off', 'struck_off'])->exists()
+            || $this->heAdmissions()->whereIn('status', ['Struck Off', 'struck_off'])->exists()
+            || $this->struckOffLogs()->where('status', 'struck_off')->exists();
     }
 
     public function getIsGraduatedAttribute(): bool
     {
-        return $this->admissions()->where('status', 'Graduated')->exists();
+        return $this->admissions()->where('status', 'Graduated')->exists()
+            || $this->heAdmissions()->where('status', 'Graduated')->exists();
     }
 
     public function getIsDroppedAttribute(): bool
     {
-        return $this->admissions()->where('status', 'Dropped')->exists();
+        return $this->admissions()->where('status', 'Dropped')->exists()
+            || $this->heAdmissions()->where('status', 'Dropped')->exists();
     }
 
     public function getAdmissionNoAttribute(): string
@@ -363,7 +373,16 @@ class Student extends Model
 
     public function getStudentCnicAttribute(): string
     {
-        return $this->attribute && $this->attribute->student_cnic ? $this->attribute->student_cnic : '';
+        if (!empty($this->attributes['cnic'])) {
+            return $this->attributes['cnic'];
+        }
+        if ($this->attribute && !empty($this->attribute->student_cnic)) {
+            return $this->attribute->student_cnic;
+        }
+        if ($this->contact && !empty($this->contact->student_cnic)) {
+            return $this->contact->student_cnic;
+        }
+        return '';
     }
 
     public function getBloodGroupAttribute(): string
@@ -484,6 +503,7 @@ class Student extends Model
 
     public function getStudentStatus(): string
     {
+        if ($this->is_struck_off) return 'Struck Off';
         if ($this->is_graduated) return 'Graduated';
         if ($this->is_current_student) return 'Active';
         if ($this->is_dropped) return 'Dropped';

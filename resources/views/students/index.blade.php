@@ -187,18 +187,16 @@
                                 <td><span class="badge bg-primary">{{ $admission->admission_year ?? 'N/A' }}</span></td>
                                 <td>
                                     @php $status = $admission->status ?? 'N/A'; @endphp
-                                    @if($status == 'Active')
+                                    @if($status == 'Active' || $status == 'Admitted')
                                         <span class="badge bg-success">Active</span>
+                                    @elseif($status == 'Struck Off' || $status == 'struck_off')
+                                        <span class="badge bg-danger">Struck Off</span>
                                     @elseif($status == 'Graduated')
-                                        <span class="badge bg-success">Graduated</span>
+                                        <span class="badge bg-primary">Graduated</span>
                                     @elseif($status == 'Dropped')
-                                        <span class="badge bg-danger">Dropped</span>
-                                    @elseif($status == 'Applied')
-                                        <span class="badge bg-warning text-dark">Applied</span>
-                                    @elseif($status == 'Admitted')
-                                        <span class="badge bg-info text-dark">Admitted</span>
+                                        <span class="badge bg-secondary">Dropped</span>
                                     @elseif($status == 'Suspended')
-                                        <span class="badge bg-danger">Suspended</span>
+                                        <span class="badge bg-warning text-dark">Suspended</span>
                                     @else
                                         <span class="badge bg-secondary">{{ $status }}</span>
                                     @endif
@@ -248,11 +246,10 @@
                     <label for="bulkStatusSelect" class="form-label">Select New Status</label>
                     <select class="form-select" id="bulkStatusSelect">
                         <option value="Active">Active</option>
+                        <option value="Struck Off">Struck Off</option>
                         <option value="Graduated">Graduated</option>
                         <option value="Dropped">Dropped</option>
                         <option value="Suspended">Suspended</option>
-                        <option value="Admitted">Admitted</option>
-                        <option value="Applied">Applied</option>
                     </select>
                 </div>
             </div>

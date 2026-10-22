@@ -58,7 +58,7 @@ class UpdateStudentStatus extends Command
                     $admission->update([
                         'current_class' => '12',
                         'academic_year' => $admissionYear + 1,
-                        'status' => 'Admitted'
+                        'status' => 'Active'
                     ]);
                     
                     // Update compulsory subjects class_level from 11 to 12

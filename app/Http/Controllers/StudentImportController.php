@@ -368,7 +368,7 @@ class StudentImportController extends Controller
             'admission_year' => $admissionYear,
             'academic_year' => $admissionYear,
             'current_class' => '11',
-            'status' => 'Admitted',
+            'status' => 'Active',
             'created_by' => Auth::id(),
         ]);
 

@@ -8,6 +8,18 @@
         <h1 class="h3 mb-0 text-gray-800">Teacher Dashboard</h1>
     </div>
 
+        @if(isset($isTodayOff) && $isTodayOff)
+        <div class="alert alert-warning border-start border-warning border-4 shadow-sm mb-4">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-umbrella-beach fa-2x text-warning me-3"></i>
+                <div>
+                    <h5 class="alert-heading mb-1 fw-bold">Attendance Closed Today</h5>
+                    <p class="mb-0">Today is marked as <strong>{{ $todayOffReason }}</strong>. Classes are not held and attendance marking is suspended for today.</p>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="row">
         @if(isset($error))
             <div class="col-12">
@@ -77,13 +89,19 @@
                                     <td>{{ $class->admission_year }}</td>
                                     <td><span class="badge bg-info text-white">{{ $class->student_count }}</span></td>
                                     <td>
-                                        <a href="{{ route('attendance.create', [
+                                        @if(isset($isTodayOff) && $isTodayOff)
+                                            <button class="btn btn-sm btn-secondary" disabled title="Attendance closed today ({{ $todayOffReason }})">
+                                                <i class="fas fa-ban me-1"></i> Closed
+                                            </button>
+                                        @else
+                                            <a href="{{ route('attendance.create', [
                                             'subject_id' => $class->subject_id, 
                                             'class' => $class->current_class, 
                                             'year' => $class->admission_year
                                         ]) }}" class="btn btn-sm btn-primary">
                                             <i class="fas fa-user-check me-1"></i> Attendance
                                         </a>
+                                        @endif
                                         <a href="{{ route('attendance.report.generate', [
                                             'subject_id' => $class->subject_id,
                                             'current_class' => $class->current_class,
@@ -142,7 +160,12 @@
                                     <td>{{ $class->admission_year }}</td>
                                     <td><span class="badge bg-success text-white">{{ $class->student_count }}</span></td>
                                     <td>
-                                        <a href="{{ route('he.attendance.create', [
+                                        @if(isset($isTodayOff) && $isTodayOff)
+                                            <button class="btn btn-sm btn-secondary" disabled title="Attendance closed today ({{ $todayOffReason }})">
+                                                <i class="fas fa-ban me-1"></i> Closed
+                                            </button>
+                                        @else
+                                            <a href="{{ route('he.attendance.create', [
                                             'subject_id' => $class->subject_id, 
                                             'program_id' => $class->program_id,
                                             'semester' => $class->current_semester,
@@ -150,6 +173,7 @@
                                         ]) }}" class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-user-check me-1"></i> Attendance
                                         </a>
+                                        @endif
                                         <a href="{{ route('he.attendance.report', [
                                             'subject_id' => $class->subject_id,
                                             'program_id' => $class->program_id,
