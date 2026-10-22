@@ -9,6 +9,7 @@
         <tr><th>ID</th><td>{{ $subject->id }}</td></tr>
         <tr><th>Name</th><td>{{ $subject->formatted_name }}</td></tr>
         <tr><th>Code</th><td>{{ $subject->code }}</td></tr>
+        <tr><th>Short Name (Board Code)</th><td>{{ $subject->short_name ?? '-' }}</td></tr>
         <tr><th>Type</th><td>{{ $subject->type }}</td></tr>
         <tr><th>Class Level</th><td>{{ $subject->class_level }}</td></tr>
         <tr><th>Total Marks Class 11</th><td>{{ $subject->total_11 }}</td></tr>

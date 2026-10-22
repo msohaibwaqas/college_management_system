@@ -40,7 +40,7 @@
                     <select name="admission_year" class="form-select" required>
                         <option value="">Select Year</option>
                         @foreach($admissionYears as $year)
-                            <option value="{{ $year }}" {{ (old('admission_year') == $year || (!old('admission_year') && $year == date('Y') - 2)) ? 'selected' : '' }}>
+                            <option value="{{ $year }}" {{ (old('admission_year', request('admission_year')) == $year || (!old('admission_year') && !request('admission_year') && $year == date('Y') - 2)) ? 'selected' : '' }}>
                                 {{ $year }}
                             </option>
                         @endforeach
@@ -48,7 +48,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">BISE Roll No (12th)</label>
-                    <input type="text" name="bise_roll_12" class="form-control" value="{{ old('bise_roll_12') }}" required placeholder="Enter Board Roll No" {{ !isset($student) ? 'autofocus' : '' }}>
+                    <input type="text" name="bise_roll_12" id="bise_roll_12" class="form-control" value="{{ old('bise_roll_12', request('bise_roll_12')) }}" required placeholder="Enter Board Roll No" {{ !isset($student) ? 'autofocus' : '' }}>
                 </div>
                 <div class="col-md-4">
                     <button type="submit" class="btn btn-success w-100">
@@ -88,6 +88,7 @@
             @csrf
             <input type="hidden" name="student_id" value="{{ $student->id }}">
             <input type="hidden" name="admission_year" value="{{ request('admission_year') }}">
+            <input type="hidden" name="bise_roll_12" value="{{ request('bise_roll_12', $student->admissions->first()?->bise_roll_12 ?? '') }}">
 
             <div class="card">
                 <div class="card-header bg-white">
@@ -128,7 +129,7 @@
                                         $isAbsent12T = $res12 ? $res12->is_absent : false;
                                         $isAbsent12P = $res12 ? $res12->is_absent : false;
                                     @endphp
-                                    <tr data-subject-name="{{ strtoupper($subject->name) }}" data-subject-id="{{ $subject->id }}">
+                                    <tr data-subject-name="{{ strtoupper($subject->name) }}" data-subject-short-name="{{ strtoupper($subject->short_name ?? '') }}" data-subject-id="{{ $subject->id }}">
                                         <td>
                                             <strong>{{ $subject->name }}</strong>
                                             <br>
@@ -227,6 +228,7 @@
         </form>
     @endif
 </div>
+@endsection
 
 @section('scripts')
 <script>
@@ -246,9 +248,18 @@ $(document).ready(function() {
     // Trigger change for any pre-checked boxes
     $('.absent-check:checked').trigger('change');
 
-    // Fetch from BISE
-    $('#fetch-bise-btn').click(function() {
-        const rollNo = $(this).data('roll');
+    // Fetch from BISE button keydown (Enter / Space)
+    $('#fetch-bise-btn').on('keydown', function(e) {
+        if (e.which === 13 || e.key === 'Enter') {
+            e.preventDefault();
+            $(this).click();
+        }
+    });
+
+    // Fetch from BISE click handler
+    $('#fetch-bise-btn').click(function(e) {
+        if (e) e.preventDefault();
+        const rollNo = $(this).data('roll') || $('#bise_roll_12').val() || '{{ request("bise_roll_12") }}';
         const btn = $(this);
         const originalHtml = btn.html();
 
@@ -305,6 +316,7 @@ $(document).ready(function() {
             'CIVN': 'CIVICS FOR NON MUSLIMS',
             'CGEO': 'COMMERCIAL GEOGRAPHY',
             'CS': 'COMPUTER SCIENCE',
+            'CSEP': 'COMPUTER SCIENCE & ENTREPRENEURSHIP-I',
             'CST': 'COMPUTER STUDIES(COMMERCE)',
             'ECO': 'ECONOMICS',
             'EDU': 'EDUCATION',
@@ -313,85 +325,108 @@ $(document).ready(function() {
             'ETH': 'ETHICS FOR NON MUSLIMS',
             'FART': 'FINE ARTS',
             'GEO': 'GEOGRAPHY',
-            'HPED': 'HEALTH AND PHYSICAL EDUCATION',
-            'HISI': 'HISTORY',
-            'HISIIIB': 'HISTORY',
-            'HISH': 'HISTORY',
-            'HISW': 'HISTORY',
-            'HISP': 'HISTORY',
+            'HPED': 'HEALTH & PHYSICAL EDUCATION',
+            'HISI': 'HISTORY OF ISLAM',
+            'HISIIIB': 'HISTORY OF ISLAM (ABBASI OF BAGHDAD)',
+            'HISH': 'HISTORY OF ISLAMIC HIND',
+            'HISW': 'HISTORY OF MODERN WORLD',
+            'HISP': 'HISTORY OF PAKISTAN',
             'IST': 'ISLAMIC STUDIES',
-            'ISL': 'ISLAMIC EDUCATION',
+            'ISL': 'ISLAMIYAT (COMPULSORY)',
             'LSC': 'LIBRARY SCIENCE',
             'MATH': 'MATHEMATICS',
             'HECO': 'OUT LINE OF HOME ECONOMICS',
             'PS': 'PAKISTAN STUDIES',
             'PC': 'PAKISTANI CULTURE',
-            'PER': 'PERSIAN LANGUAGE',
+            'PER': 'PERSIAN',
             'PHIL': 'PHILOSOPHY',
             'PHY': 'PHYSICS',
             'POA': 'PRINCIPLES OF ACCOUNTING',
             'POC': 'PRINCIPLES OF COMMERCE',
             'POE': 'PRINCIPLES OF ECONOMICS',
             'PSY': 'PSYCHOLOGY',
-            'PUNJ': 'PUNJABI LANGUAGE',
+            'PUNJ': 'PUNJABI',
             'RE': 'RELIGIOUS EDUCATION (COMPULSORY)',
             'SRK': 'SARAIKI',
             'SOC': 'SOCIOLOGY',
             'STAT': 'STATISTICS',
-            'TRQ': 'TRANSLATION OF HOLY QURAN',
+            'TRQ': 'TARJUMA-TUL-QURAN-UL-MAJEED',
             'UR': 'URDU',
-            // Legacy/Common variations
+            'URAD': 'URDU ADVANCE',
+            'CI': 'CIVICS',
             'MAT': 'MATHEMATICS',
             'COMP': 'COMPUTER SCIENCE',
             'IS': 'ISLAMIC STUDIES',
             'ECON': 'ECONOMICS',
             'GEOG': 'GEOGRAPHY',
-            'HPE': 'HEALTH AND PHYSICAL EDUCATION',
+            'HPE': 'HEALTH & PHYSICAL EDUCATION',
             'ARA': 'ARABIC',
-            'PUN': 'PUNJABI LANGUAGE',
+            'PUN': 'PUNJABI',
             'SAR': 'SARAIKI',
             'BAL': 'BALOCHI',
             'PAS': 'PASHTO',
             'SIN': 'SINDHI',
-            'UE': 'URDU ELECTIVE'
+            'UE': 'URDU ADVANCE',
+            'HIS': 'HISTORY',
+            'HISII': 'HISTORY OF ISLAM',
+            'HISIII': 'HISTORY OF ISLAM',
+            'PAK': 'PAKISTAN STUDIES'
+        };
+
+        const isSubjectMatch = (rawBoardSubject, localName, shortName = '') => {
+            if (!rawBoardSubject || !localName) return false;
+            let bCode = rawBoardSubject.toUpperCase().trim();
+            bCode = bCode.replace(/[- ]?(I{1,2})$/, '').trim();
+            
+            // 1. Direct match with short_name from database if present
+            if (shortName && (bCode === shortName || rawBoardSubject.toUpperCase().trim() === shortName)) {
+                return true;
+            }
+
+            if (bCode === localName || rawBoardSubject.toUpperCase().trim() === localName) {
+                return true;
+            }
+
+            const mappedName = aliasMap[bCode] ? aliasMap[bCode].toUpperCase() : (aliasMap[rawBoardSubject.toUpperCase().trim()] ? aliasMap[rawBoardSubject.toUpperCase().trim()].toUpperCase() : null);
+            
+            if (mappedName) {
+                if (mappedName === localName) return true;
+                
+                const synonymGroups = [
+                    ['TARJUMA-TUL-QURAN-UL-MAJEED', 'TRANSLATION OF HOLY QURAN', 'TARJUMA TUL QURAN', 'TARJUMATUL QURAN', 'TRANSLATION OF THE HOLY QURAN'],
+                    ['ISLAMIYAT (COMPULSORY)', 'ISLAMIC EDUCATION', 'ISLAMIYAT', 'ISLAMIYAT COMPULSORY', 'ISLAMIC STUDIES (COMPULSORY)'],
+                    ['URDU ADVANCE', 'URDU ELECTIVE', 'URDU ADVANCED'],
+                    ['HEALTH & PHYSICAL EDUCATION', 'HEALTH AND PHYSICAL EDUCATION', 'HEALTH & PHYSICAL EDU', 'HEALTH AND PHYSICAL EDU'],
+                    ['CIVICS FOR NON MUSLIMS', 'CIVICS'],
+                    ['ETHICS FOR NON MUSLIMS', 'ETHICS'],
+                    ['RELIGIOUS EDUCATION (COMPULSORY)', 'RELIGIOUS EDUCATION'],
+                    ['HISTORY OF ISLAM', 'HISTORY OF ISLAM (ABBASI OF BAGHDAD)', 'HISTORY OF ISLAM (MUSLIMS IN SPAIN)', 'HISTORY OF ISLAMIC HIND', 'HISTORY OF MODERN WORLD', 'HISTORY OF PAKISTAN', 'HISTORY'],
+                    ['COMPUTER SCIENCE & ENTREPRENEURSHIP-I', 'COMPUTER SCIENCE & ENTREPRENEURSHIP', 'COMPUTER SCIENCE'],
+                    ['COMPUTER STUDIES(COMMERCE)', 'COMPUTER STUDIES (COMMERCE)', 'COMPUTER STUDIES']
+                ];
+
+                for (const group of synonymGroups) {
+                    const hasMapped = group.some(g => g === mappedName);
+                    const hasLocal = group.some(g => g === localName);
+                    if (hasMapped && hasLocal) return true;
+                }
+
+                if (mappedName === 'EDUCATION' && localName !== 'EDUCATION') return false;
+                if (mappedName === 'COMPUTER SCIENCE' && localName.includes('ENTREPRENEURSHIP')) return false;
+
+                if (mappedName.length > 4 && localName.includes(mappedName)) return true;
+                if (localName.length > 4 && mappedName.includes(localName)) return true;
+            }
+            return false;
         };
 
         $('tr[data-subject-name]').each(function() {
             const row = $(this);
             const localName = row.data('subject-name').toUpperCase().trim();
+            const shortName = row.data('subject-short-name') ? row.data('subject-short-name').toUpperCase().trim() : '';
             const subId = row.data('subject-id');
 
-            // Helper function to prepare board code
-            const getCleanBoardCode = (rawCode) => {
-                let bc = rawCode.toUpperCase().trim();
-                return bc.replace(/^(.{2,})(I{1,3}|IV|V|VI|VII|VIII)[A-Z]?$/, '$1').trim();
-            };
-
-            // 1. Priority 1: Exact matches (mapped name or code)
-            let match = boardData.find(b => {
-                const bCode = getCleanBoardCode(b.board_subject);
-                const mappedFullName = aliasMap[bCode] ? aliasMap[bCode].toUpperCase() : null;
-                return (mappedFullName && mappedFullName === localName) || (bCode === localName);
-            });
-
-            // 2. Priority 2: Substring matches (fallback for long names)
-            if (!match) {
-                match = boardData.find(b => {
-                    const bCode = getCleanBoardCode(b.board_subject);
-                    const mappedFullName = aliasMap[bCode] ? aliasMap[bCode].toUpperCase() : null;
-                    if (!mappedFullName) return false;
-
-                    // Special Case: "EDUCATION" should not match "HEALTH AND PHYSICAL EDUCATION"
-                    // unless they are the same subject. "EDUCATION" is too generic.
-                    if (mappedFullName === 'EDUCATION' && localName !== 'EDUCATION') return false;
-
-                    // Standard Substring Logic
-                    if (mappedFullName.length > 4 && localName.includes(mappedFullName)) return true;
-                    if (localName.length > 4 && mappedFullName.includes(localName)) return true;
-                    
-                    return false;
-                });
-            }
+            let match = boardData.find(b => isSubjectMatch(b.board_subject, localName, shortName));
 
             if (match) {
                 // Fill Part-I Theory
@@ -445,7 +480,21 @@ $(document).ready(function() {
             $(this).val(max);
         }
     });
+
+    // Auto-focus logic: focus fetch button if present, otherwise roll number input
+    const fetchBtn = document.getElementById('fetch-bise-btn');
+    if (fetchBtn) {
+        setTimeout(function() { fetchBtn.focus(); }, 100);
+    } else {
+        const rollInput = document.getElementById('bise_roll_12');
+        if (rollInput) {
+            rollInput.focus();
+            if (rollInput.value) {
+                const len = rollInput.value.length;
+                rollInput.setSelectionRange(len, len);
+            }
+        }
+    }
 });
 </script>
-@endsection
 @endsection

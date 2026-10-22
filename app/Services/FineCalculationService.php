@@ -404,7 +404,7 @@ class FineCalculationService
             'total_amount'     => (float) (clone $query)->sum('total_amount'),
             'paid_amount'      => (float) (clone $query)->sum('paid_amount'),
             'waived_amount'    => (float) (clone $query)->sum('waived_amount'),
-            'balance_amount'   => (float) (clone $query)->sum('balance_amount'),
+            'balance_amount'   => (float) (clone $query)->sum(DB::raw('COALESCE(total_amount, 0) - COALESCE(paid_amount, 0) - COALESCE(waived_amount, 0)')),
         ];
     }
 }

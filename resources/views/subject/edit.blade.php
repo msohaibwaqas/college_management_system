@@ -33,6 +33,12 @@
             <input type="text" name="code" value="{{ $subject->code ?? old('code') }}" class="form-control">
             @error('code') <div class="text-danger">{{ $message }}</div> @enderror
         </div>
+        <div class="mb-3">
+            <label class="form-label">Short Name / Board Code (e.g. TRQ, ISL, ENG, BIO)</label>
+            <input type="text" name="short_name" value="{{ $subject->short_name ?? old('short_name') }}" class="form-control" placeholder="e.g. UR, ENG, TRQ, ISL, BIO">
+            @error('short_name') <div class="text-danger">{{ $message }}</div> @enderror
+        </div>
+
 
         <div class="mb-3">
             <label class="form-label">Type</label>

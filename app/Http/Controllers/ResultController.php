@@ -533,9 +533,15 @@ class ResultController extends Controller
             }
         });
 
+        $rollNo = $request->input('bise_roll_12') ?: ($student->admissions->first()?->bise_roll_12 ?? '');
+        $rollPrefix = strlen($rollNo) >= 4 ? substr($rollNo, 0, 4) : $rollNo;
+
         return redirect()->route('results.final.create')
             ->with('success', 'Final results saved successfully!')
-            ->withInput(['admission_year' => $request->admission_year]); 
+            ->withInput([
+                'admission_year' => $request->admission_year,
+                'bise_roll_12' => $rollPrefix,
+            ]); 
     }
 
     /**
@@ -623,9 +629,15 @@ class ResultController extends Controller
             }
         });
 
+        $rollNo = $request->input('bise_roll_11') ?: ($student->admissions->first()?->bise_roll_11 ?? '');
+        $rollPrefix = strlen($rollNo) >= 4 ? substr($rollNo, 0, 4) : $rollNo;
+
         return redirect()->route('results.11th.create')
             ->with('success', '11th Class results saved successfully!')
-            ->withInput(['admission_year' => $request->admission_year]); 
+            ->withInput([
+                'admission_year' => $request->admission_year,
+                'bise_roll_11' => $rollPrefix,
+            ]); 
     }
 
     /**

@@ -42,6 +42,7 @@ class Subject extends Model
     protected $fillable = [
         'name',
         'code',
+        'short_name',
         'type',
         'class_level',
         'total_11',
@@ -58,6 +59,7 @@ class Subject extends Model
     protected $casts = [
         'name' => 'string',
         'code' => 'string',
+        'short_name' => 'string',
         'type' => 'string',
         'class_level' => 'string',
         'total_11' => 'integer',

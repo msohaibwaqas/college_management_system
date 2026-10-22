@@ -180,7 +180,7 @@ class Student extends Model
 
     public function totalOutstandingFine(): float
     {
-        return (float) $this->unpaidFines()->sum('balance_amount');
+        return (float) $this->unpaidFines()->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(total_amount, 0) - COALESCE(paid_amount, 0) - COALESCE(waived_amount, 0)'));
     }
 
     /**

@@ -26,6 +26,7 @@
                 <th>ID</th>
                 <th>Name</th>
                 <th>Code</th>
+                <th>Short Name</th>
                 <th>Type</th>
                 <th>Class Level</th>
                 <th>Total Marks (11/12)</th>
@@ -38,6 +39,7 @@
                 <td>{{ $subject->id }}</td>
                 <td>{{ $subject->formatted_name }}</td>
                 <td>{{ $subject->code }}</td>
+                <td><span class="badge bg-secondary">{{ $subject->short_name ?? '-' }}</span></td>
                 <td>{{ $subject->type }}</td>
                 <td>{{ $subject->class_level }}</td>
                 <td>{{ $subject->total_11 }}/{{ $subject->total_12 }}</td>

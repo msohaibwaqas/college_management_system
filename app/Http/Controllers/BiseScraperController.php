@@ -76,7 +76,7 @@ class BiseScraperController extends Controller
                         $obtained = trim($cols->eq(2)->text());
                         
                         // Ignore header, sub-header (Part I), and Grand Total rows
-                        if (in_array($sub, ['Subject', 'Part I', 'Grand Total']) || strpos($sub, 'BOARD OF') !== false) {
+                        if (in_array($sub, ['Subject', 'Part I', 'Grand Total']) || strpos($sub, 'BOARD OF') !== false || strpos($sub, 'Roll No') !== false || strpos($sub, 'Student Name') !== false) {
                             return;
                         }
 
@@ -87,9 +87,13 @@ class BiseScraperController extends Controller
                             return is_numeric($val) ? (int)$val : null;
                         };
 
+                        $stripPart = function($val) {
+                            return preg_replace('/(?<=[A-Za-z0-9])[- ]?(I{1,2})$/', '', trim($val));
+                        };
+
                         if ($sub && $obtained !== null) {
-                            // Extract root subject name (removes I at end)
-                            $root = preg_replace('/(?<=..)(I|II|III|IV|V|VI|VII|VIII)[A-Z]?$/', '', $sub);
+                            // Extract root subject name (removes Part I suffix)
+                            $root = $stripPart($sub);
                             
                             $marks[] = [
                                 'board_subject' => $root ?: $sub,
@@ -109,7 +113,7 @@ class BiseScraperController extends Controller
                         $prac = trim($cols->eq(4)->text());
 
                         // Ignore header rows
-                        if ($sub1 === 'Subject' || strpos($sub1, 'BOARD OF') !== false || $sub1 === 'Grand Total' || $sub1 === 'Part I') {
+                        if ($sub1 === 'Subject' || strpos($sub1, 'BOARD OF') !== false || $sub1 === 'Grand Total' || $sub1 === 'Part I' || strpos($sub1, 'Roll No') !== false || strpos($sub1, 'Student Name') !== false) {
                             return;
                         }
 
@@ -120,8 +124,12 @@ class BiseScraperController extends Controller
                             return is_numeric($val) ? (int)$val : null;
                         };
 
-                        $root1 = preg_replace('/(?<=..)(I|II|III|IV|V|VI|VII|VIII)[A-Z]?$/', '', $sub1);
-                        $root2 = preg_replace('/(?<=..)(I|II|III|IV|V|VI|VII|VIII)[A-Z]?$/', '', $sub2);
+                        $stripPart = function($val) {
+                            return preg_replace('/(?<=[A-Za-z0-9])[- ]?(I{1,2})$/', '', trim($val));
+                        };
+
+                        $root1 = $stripPart($sub1);
+                        $root2 = $stripPart($sub2);
 
                         if ($root1 === $root2 || $sub2 === '--' || $sub2 === '' || $sub2 === ' ') {
                             $marks[] = [
@@ -133,7 +141,7 @@ class BiseScraperController extends Controller
                         } else {
                             if ($sub1 && $sub1 !== '--' && $sub1 !== ' ') {
                                 $marks[] = [
-                                    'board_subject' => $sub1,
+                                    'board_subject' => $root1 ?: $sub1,
                                     'p1_theory' => $clean($m1),
                                     'p2_theory' => null,
                                     'practical' => null,
@@ -141,7 +149,7 @@ class BiseScraperController extends Controller
                             }
                             if ($sub2 && $sub2 !== '--' && $sub2 !== ' ') {
                                 $marks[] = [
-                                    'board_subject' => $sub2,
+                                    'board_subject' => $root2 ?: $sub2,
                                     'p1_theory' => null,
                                     'p2_theory' => $clean($m2),
                                     'practical' => $clean($prac),

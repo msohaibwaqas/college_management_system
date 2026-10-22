@@ -28,7 +28,11 @@ class FineController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $isTeacher = $user && $user->isTeacher();
+        if ($user && $user->isTeacher()) {
+            abort(403, 'Unauthorized access. Teachers cannot access student fines.');
+        }
+
+        $isTeacher = false;
         $canManage = $user && $user->isAdministrativeStaff();
 
         $query = StudentFine::with(['student', 'admission', 'fineRule', 'payerCollector', 'waiverAuthorizer'])

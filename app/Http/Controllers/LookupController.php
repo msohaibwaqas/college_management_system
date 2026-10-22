@@ -161,6 +161,7 @@ class LookupController extends Controller
         $request->validate([
             'name' => 'required|string|max:150',
             'code' => 'required|string|max:10|unique:subjects,code',
+            'short_name' => 'nullable|string|max:20',
             'type' => 'required|in:Compulsory,Elective',
             'class_level' => 'required|in:11,12,both',
             // total_11 validation
@@ -200,7 +201,7 @@ class LookupController extends Controller
 
         // Prepare data with defaults
         $data = $request->only([
-            'name', 'code', 'type', 'class_level', 'total_11', 'theory_12', 'practical_12'
+            'name', 'code', 'short_name', 'type', 'class_level', 'total_11', 'theory_12', 'practical_12'
         ]);
 
         // Set defaults based on class level
@@ -230,6 +231,7 @@ class LookupController extends Controller
         $request->validate([
             'name' => 'required|string|max:150',
             'code' => 'required|string|max:10|unique:subjects,code,' . $subject->id,
+            'short_name' => 'nullable|string|max:20',
             'type' => 'required|in:Compulsory,Elective',
             'class_level' => 'required|in:11,12,both',
             'total_11' => [
@@ -266,7 +268,7 @@ class LookupController extends Controller
 
         // Prepare data with defaults
         $data = $request->only([
-            'name', 'code', 'type', 'class_level', 'total_11', 'theory_12', 'practical_12'
+            'name', 'code', 'short_name', 'type', 'class_level', 'total_11', 'theory_12', 'practical_12'
         ]);
 
         // Set defaults based on class level

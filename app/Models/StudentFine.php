@@ -170,6 +170,14 @@ class StudentFine extends Model
         };
     }
 
+    public function getBalanceAmountAttribute($value): float
+    {
+        if ($value !== null) {
+            return (float) $value;
+        }
+        return max(0, round((float) $this->total_amount - (float) $this->paid_amount - (float) $this->waived_amount, 2));
+    }
+
     public function getStatusBadgeAttribute(): string
     {
         return match ($this->status) {

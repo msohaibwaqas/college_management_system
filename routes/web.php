@@ -512,25 +512,21 @@ Route::middleware(['auth'])->group(function () {
         });
     });
 
-    // Student Fine Management
-    Route::prefix('fines')->name('fines.')->group(function () {
-        // Shared: view fines and printable slips
-        Route::middleware('role:admin,principal,clerk,hssc_clerk,hssc_admin,super_admin,accountant,hssc_accountant,bs_accountant,teacher')->group(function () {
-            Route::get('/', [\App\Http\Controllers\FineController::class, 'index'])->name('index');
-            Route::get('/slip/{fine}', [\App\Http\Controllers\FineController::class, 'printSlip'])->name('slip');
-            Route::get('/summary-print', [\App\Http\Controllers\FineController::class, 'printSummary'])->name('print-summary');
-        });
+    // Student Fine Management (Accessible only by admin, principal, clerk and accounts)
+    Route::prefix('fines')->name('fines.')->middleware('role:admin,principal,clerk,hssc_clerk,hssc_admin,super_admin,bs_admin,bs_clerk,accountant,hssc_accountant,bs_accountant')->group(function () {
+        // View fines and printable slips
+        Route::get('/', [\App\Http\Controllers\FineController::class, 'index'])->name('index');
+        Route::get('/slip/{fine}', [\App\Http\Controllers\FineController::class, 'printSlip'])->name('slip');
+        Route::get('/summary-print', [\App\Http\Controllers\FineController::class, 'printSummary'])->name('print-summary');
 
         // Administrative & Accounts: calculation, generation, policy rules, payments, and waivers
-        Route::middleware('role:admin,principal,clerk,hssc_clerk,hssc_admin,super_admin,accountant,hssc_accountant,bs_accountant')->group(function () {
-            Route::get('/generate', [\App\Http\Controllers\FineController::class, 'generateForm'])->name('generate');
-            Route::post('/generate', [\App\Http\Controllers\FineController::class, 'storeGenerated'])->name('generate.store');
-            Route::get('/rules', [\App\Http\Controllers\FineController::class, 'rulesIndex'])->name('rules');
-            Route::post('/rules', [\App\Http\Controllers\FineController::class, 'storeRule'])->name('rules.store');
-            Route::put('/rules/{rule}', [\App\Http\Controllers\FineController::class, 'updateRule'])->name('rules.update');
-            Route::post('/{fine}/payment', [\App\Http\Controllers\FineController::class, 'collectPayment'])->name('collect-payment');
-            Route::post('/{fine}/waive', [\App\Http\Controllers\FineController::class, 'waiveFine'])->name('waive');
-        });
+        Route::get('/generate', [\App\Http\Controllers\FineController::class, 'generateForm'])->name('generate');
+        Route::post('/generate', [\App\Http\Controllers\FineController::class, 'storeGenerated'])->name('generate.store');
+        Route::get('/rules', [\App\Http\Controllers\FineController::class, 'rulesIndex'])->name('rules');
+        Route::post('/rules', [\App\Http\Controllers\FineController::class, 'storeRule'])->name('rules.store');
+        Route::put('/rules/{rule}', [\App\Http\Controllers\FineController::class, 'updateRule'])->name('rules.update');
+        Route::post('/{fine}/payment', [\App\Http\Controllers\FineController::class, 'collectPayment'])->name('collect-payment');
+        Route::post('/{fine}/waive', [\App\Http\Controllers\FineController::class, 'waiveFine'])->name('waive');
     });
 
 }); // End of auth middleware group
