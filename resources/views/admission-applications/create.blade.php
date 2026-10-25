@@ -27,7 +27,7 @@
 
         {{-- Personal Information --}}
         <div class="card mb-4">
-            <div class="card-header bg-primary text-white"><i class="fas fa-user me-2"></i>Personal Information</div>
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-user fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Personal Information</h5></div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-3">
@@ -117,7 +117,7 @@
 
         {{-- Father Information --}}
         <div class="card mb-4">
-            <div class="card-header bg-secondary text-white"><i class="fas fa-male me-2"></i>Father / Guardian</div>
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-male fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Father / Guardian</h5></div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-3">
@@ -151,7 +151,7 @@
 
         {{-- Contact Information --}}
         <div class="card mb-4">
-            <div class="card-header bg-info text-white"><i class="fas fa-phone me-2"></i>Contact</div>
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-phone fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Contact Information</h5></div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-3">
@@ -182,7 +182,7 @@
         @if(in_array($program, ['ADP', 'BS']))
         {{-- Academic Record: HSSC (Required for ADP/BS) --}}
         <div class="card mb-4">
-            <div class="card-header bg-success text-white"><i class="fas fa-graduation-cap me-2"></i>HSSC / Intermediate Record</div>
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-graduation-cap fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">HSSC / Intermediate Record</h5></div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-3">
@@ -245,7 +245,7 @@
 
         {{-- SSC Record (Required for ALL) --}}
         <div class="card mb-4">
-            <div class="card-header bg-success text-white"><i class="fas fa-graduation-cap me-2"></i>SSC Record</div>
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-graduation-cap fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">SSC Record</h5></div>
             <div class="card-body">
                 <div class="row g-3">
                     <div class="col-md-3">
@@ -310,7 +310,7 @@
 
         {{-- Admission Preferences / Details --}}
         <div class="card mb-4">
-            <div class="card-header bg-warning text-dark"><i class="fas fa-book me-2"></i>Admission Details</div>
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-book fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Admission & Subject Details</h5></div>
             <div class="card-body">
                 <div class="row g-3">
                     @if(in_array($program, ['ADP', 'BS']))

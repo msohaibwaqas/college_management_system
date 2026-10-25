@@ -672,4 +672,179 @@ class InvigilationService
 
         return $report;
     }
+/**
+     * Get index data for HSSC invigilation assignments.
+     */
+    public function getHsscIndexData(\Illuminate\Http\Request $request): array
+    {
+        $query = InvigilatorAssignment::with(['seatingPlan', 'room', 'staff.designationModel']);
+
+        if ($request->filled('date')) {
+            $query->forDate($request->date);
+        }
+
+        if ($request->filled('room_id')) {
+            $query->forRoom($request->room_id);
+        }
+
+        if ($request->filled('staff_id')) {
+            $query->where('staff_id', $request->staff_id);
+        }
+
+        $assignments = $query->orderBy('exam_date')->orderBy('room_id')->get();
+        $rooms = \App\Models\Room::all();
+        $staff = Staff::teaching()->active()->with('designationModel')->get();
+
+        $examDates = SeatingPlan::select('test_date as date')
+            ->distinct()
+            ->orderBy('date')
+            ->get()
+            ->map(function ($plan) {
+                return (object)['date' => \Carbon\Carbon::parse($plan->date)];
+            });
+
+        $dutyCounts = $this->getDutyCounts();
+        $exemptions = ExamConductor::with('staff')->get();
+        $dutyRules = InvigilatorDutyRule::with('designation')->get()->keyBy('designation_id');
+
+        return compact('assignments', 'rooms', 'staff', 'examDates', 'dutyCounts', 'exemptions', 'dutyRules');
+    }
+
+    /**
+     * Get assign view data for HSSC.
+     */
+    public function getHsscAssignViewData(): array
+    {
+        $examDates = SeatingPlan::select('test_date as date')
+            ->distinct()
+            ->orderBy('date')
+            ->get()
+            ->map(function ($plan) {
+                return (object)['date' => \Carbon\Carbon::parse($plan->date)];
+            });
+
+        $staffData = $this->getStaffRoster();
+
+        return compact('staffData', 'examDates');
+    }
+
+    /**
+     * Validate and assign a manual invigilator for HSSC.
+     */
+    public function assignManualInvigilator(string $examDate, int $roomId, int $staffId): array
+    {
+        $seatingPlan = SeatingPlan::where('test_date', $examDate)->first();
+        if (!$seatingPlan) {
+            return ['success' => false, 'errors' => ['exam_date' => 'No seating plan found for this date.']];
+        }
+
+        if ($this->isStaffExempted($staffId, $examDate)) {
+            return ['success' => false, 'errors' => ['staff_id' => 'This staff member is exempted from duty on this date.']];
+        }
+
+        $alreadyAssignedToday = InvigilatorAssignment::where('staff_id', $staffId)
+            ->where('exam_date', $examDate)
+            ->exists();
+
+        if ($alreadyAssignedToday) {
+            return ['success' => false, 'errors' => ['staff_id' => 'This staff member is already assigned to another room on this date.']];
+        }
+
+        $alreadyAssignedToRoom = InvigilatorAssignment::where('seating_plan_id', $seatingPlan->id)
+            ->where('room_id', $roomId)
+            ->where('staff_id', $staffId)
+            ->exists();
+
+        if ($alreadyAssignedToRoom) {
+            return ['success' => false, 'errors' => ['staff_id' => 'This staff member is already assigned to this room.']];
+        }
+
+        $staff = Staff::find($staffId);
+        $currentDutyCount = InvigilatorAssignment::where('staff_id', $staffId)->count();
+        $maxDutyDays = InvigilatorDutyRule::getMaxDutyDays($staff->designation_id) ?? 999;
+
+        if ($currentDutyCount >= $maxDutyDays) {
+            return ['success' => false, 'errors' => ['staff_id' => "This staff member has reached their maximum duty limit ({$maxDutyDays} days)."]];
+        }
+
+        $assignment = InvigilatorAssignment::create([
+            'seating_plan_id' => $seatingPlan->id,
+            'room_id' => $roomId,
+            'staff_id' => $staffId,
+            'exam_date' => $examDate,
+            'is_auto_assigned' => false,
+        ]);
+
+        return ['success' => true, 'assignment' => $assignment];
+    }
+
+    /**
+     * Get HSSC rooms and existing assignments for an exam date.
+     */
+    public function getHsscRoomsByDate(string $date): array
+    {
+        $hsscPlan = SeatingPlan::where('test_date', $date)->first();
+        if (!$hsscPlan) {
+            return ['error' => 'No HSSC seating plan found for this date'];
+        }
+
+        $allRoomsData = [];
+        $existingAssignmentsData = [];
+
+        $rooms = $hsscPlan->details->groupBy('room_id');
+        foreach ($rooms as $roomId => $details) {
+            $room = $details->first()->room;
+            $allRoomsData[] = [
+                'id' => $roomId,
+                'name' => $room->name,
+                'section' => 'HSSC',
+                'plan_id' => $hsscPlan->id,
+                'key' => "hssc_{$hsscPlan->id}_{$roomId}"
+            ];
+        }
+
+        $assignments = InvigilatorAssignment::where('seating_plan_id', $hsscPlan->id)
+            ->with('staff.designationModel')
+            ->get()
+            ->groupBy('room_id');
+
+        foreach ($assignments as $roomId => $roomAssignments) {
+            $existingAssignmentsData["hssc_{$hsscPlan->id}_{$roomId}"] = $roomAssignments->map(function ($a) {
+                return [
+                    'id' => $a->id,
+                    'staff_id' => $a->staff_id,
+                    'staff_name' => $a->staff->first_name . ' ' . $a->staff->last_name,
+                    'designation' => $a->staff->designationModel->name ?? $a->staff->designation ?? 'N/A',
+                ];
+            });
+        }
+
+        return [
+            'rooms' => $allRoomsData,
+            'existing_assignments' => $existingAssignmentsData,
+        ];
+    }
+
+    /**
+     * Get data for HSSC invigilators create form.
+     */
+    public function getHsscCreateFormData(): array
+    {
+        $designations = \App\Models\Designation::all();
+        $dutyRules = InvigilatorDutyRule::with('designation')->get()->keyBy('designation_id');
+        $staff = Staff::teaching()->active()->with('designationModel')->get();
+        $examConductors = ExamConductor::with('staff.designationModel')->get();
+
+        $hsscDates = \App\Models\Datesheet::select('test_date')
+            ->distinct()
+            ->orderBy('test_date')
+            ->pluck('test_date')
+            ->map(function ($date) {
+                return \Carbon\Carbon::parse($date);
+            });
+
+        $examDates = $hsscDates->unique()->sort()->values();
+
+        return compact('designations', 'dutyRules', 'staff', 'examConductors', 'examDates');
+    }
 }

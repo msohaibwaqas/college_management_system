@@ -15,11 +15,11 @@
                 @csrf
                 <input type="hidden" name="admission_year" value="{{ $admissionYear }}">
                 <input type="hidden" name="subject_id" value="{{ $subject ? $subject->id : 'all' }}">
-                <button type="submit" class="btn btn-danger">
+                <button type="submit" class="btn btn-outline-danger">
                     <i class="fas fa-file-pdf me-2"></i>Export as PDF
                 </button>
             </form>
-            <button onclick="window.print()" class="btn btn-warning">
+            <button onclick="window.print()" class="btn btn-outline-primary">
                 <i class="fas fa-print me-2"></i>Print
             </button>
         </div>

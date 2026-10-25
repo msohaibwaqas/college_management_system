@@ -29,7 +29,7 @@
                         <td>{{ $student->father->name ?? 'N/A' }}</td>
                         <td>
                             @if($sec)
-                                <span class="badge bg-success">{{ $sec }}</span>
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ $sec }}</span>
                             @else
                                 <span class="text-muted small">—</span>
                             @endif

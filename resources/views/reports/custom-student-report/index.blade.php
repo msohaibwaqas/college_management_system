@@ -20,7 +20,7 @@
     {{-- Header Banner Card --}}
     <div class="row justify-content-center mb-4 d-print-none">
         <div class="col-12">
-            <div class="card border-0 shadow-sm" style="border-radius: 16px; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%); color: #fff;">
+            <div class="card border-0 shadow-sm" class="card border-0 shadow-sm report-hero-card" style="border-radius: 16px;">
                 <div class="card-body p-4">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
                         <div>
@@ -58,7 +58,7 @@
     <div class="row g-3 mb-4 d-print-none">
         {{-- Total Students --}}
         <div class="col-xl-2 col-md-4 col-sm-6">
-            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid #3b82f6 !important;">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid var(--col-primary) !important;">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -79,7 +79,7 @@
 
         {{-- Overall Pass Rate --}}
         <div class="col-xl-2 col-md-4 col-sm-6">
-            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid #10b981 !important;">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid var(--col-secondary) !important;">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -100,7 +100,7 @@
 
         {{-- Average Attendance --}}
         <div class="col-xl-3 col-md-4 col-sm-6">
-            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid #f59e0b !important;">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid var(--col-highlight) !important;">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -125,7 +125,7 @@
 
         {{-- Fee Recovery --}}
         <div class="col-xl-3 col-md-6 col-sm-6">
-            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid #8b5cf6 !important;">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid var(--col-primary) !important;">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
@@ -146,7 +146,7 @@
 
         {{-- Struck-Off Count --}}
         <div class="col-xl-2 col-md-6 col-sm-12">
-            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid #ef4444 !important;">
+            <div class="card border-0 shadow-sm h-100" style="border-radius: 12px; border-left: 4px solid var(--col-accent) !important;">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>

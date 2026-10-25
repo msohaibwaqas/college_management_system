@@ -35,9 +35,7 @@
 
     <!-- Test Selection from Datesheet -->
     <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">1. Select Test Date</h5>
-        </div>
+        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle fw-bold">1</span><h5 class="mb-0 fw-bold text-dark">Select Test Date</h5></div>
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-4">
@@ -71,9 +69,7 @@
 
     <!-- Test Details (Auto-filled) -->
     <div class="card mb-4" id="testDetailsCard" style="display: none;">
-        <div class="card-header bg-success text-white">
-            <h5 class="mb-0">2. Test Details (Auto-filled from Datesheet)</h5>
-        </div>
+        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle fw-bold">2</span><h5 class="mb-0 fw-bold text-dark">Test Details (Auto-filled from Datesheet)</h5></div>
         <div class="card-body">
             <div class="row g-3">
                 <div class="col-md-3">

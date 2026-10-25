@@ -27,34 +27,34 @@
     <div class="row mb-3">
         <div class="col-12">
             @if($activeRole != 'teacher')
-            <a href="{{ route('students.create') }}" class="btn btn-success">
+            <a href="{{ route('students.create') }}" class="btn btn-primary">
                 <i class="fas fa-plus me-1"></i>Add Student
             </a>
-            <a href="{{ route('students.import') }}" class="btn btn-info ms-2">
+            <a href="{{ route('students.import') }}" class="btn btn-outline-primary ms-2">
                 <i class="fas fa-file-import me-1"></i>Import Students
             </a>
             @endif
-            <button id="exportBtn" class="btn btn-primary ms-2">
+            <button id="exportBtn" class="btn btn-outline-secondary ms-2">
                 <i class="fas fa-file-export me-1"></i>Export to CSV
             </button>
             @if($activeRole != 'teacher')
-            <button id="bulkDeleteBtn" class="btn btn-danger ms-2" style="display: none;">
+            <button id="bulkDeleteBtn" class="btn btn-outline-danger ms-2" style="display: none;">
                 <i class="fas fa-trash me-1"></i>Delete Selected (<span id="selectedCount">0</span>)
             </button>
-            <button id="generateIdCardsBtn" class="btn btn-warning ms-2" style="display: none;">
+            <button id="generateIdCardsBtn" class="btn btn-outline-primary ms-2" style="display: none;">
                 <i class="fas fa-id-card me-1"></i>Generate ID Cards
             </button>
-            <button id="bulkStatusBtn" class="btn btn-info ms-2" style="display: none;" data-bs-toggle="modal" data-bs-target="#statusUpdateModal">
+            <button id="bulkStatusBtn" class="btn btn-outline-secondary ms-2" style="display: none;" data-bs-toggle="modal" data-bs-target="#statusUpdateModal">
                 <i class="fas fa-user-edit me-1"></i>Update Status
             </button>
-            <button id="bulkPromoteBtn" class="btn btn-warning ms-2" style="display: none;" data-bs-toggle="modal" data-bs-target="#promoteModal">
+            <button id="bulkPromoteBtn" class="btn btn-outline-primary ms-2" style="display: none;" data-bs-toggle="modal" data-bs-target="#promoteModal">
                 <i class="fas fa-level-up-alt me-1"></i>Promote to Class 12
             </button>
-            <button id="bulkCreateAccountsBtn" class="btn btn-success ms-2" style="display: none;">
+            <button id="bulkCreateAccountsBtn" class="btn btn-outline-primary ms-2" style="display: none;">
                 <i class="fas fa-user-plus me-1"></i>Generate Accounts
             </button>
             @endif
-            <a href="{{ route('students.trash') }}" class="btn btn-secondary ms-2">
+            <a href="{{ route('students.trash') }}" class="btn btn-outline-secondary ms-2">
                 <i class="fas fa-trash-alt me-1"></i>Recycle Bin
             </a>
         </div>

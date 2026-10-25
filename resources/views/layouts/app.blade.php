@@ -14,8 +14,14 @@
     {{-- Google Fonts for Urdu/Arabic support --}}
     <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&family=Noto+Sans+Arabic:wght@400;700&display=swap" rel="stylesheet">
 
+    {{-- Google Fonts: Outfit --}}
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     {{-- Custom Styles --}}
     <link href="{{ asset('css/custom.css') }}?v={{ filemtime(public_path('css/custom.css')) }}" rel="stylesheet">
+
+    {{-- Dynamic Theme Palette & Unified Component Styling --}}
+    @include('layouts.dynamic-theme')
 
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -629,19 +635,18 @@
             </li>
             @endif
 
-            {{-- Notifications --}}
-            @if($user->is_super_admin || $userRoles->contains('name', 'principal'))
+            {{-- Notifications (Available to all users) --}}
             <li>
                 <a href="{{ route('notifications.index') }}" class="{{ request()->routeIs('notifications.*') ? 'active' : '' }}">
                     <i class="fas fa-bell"></i>
                     <span>Notifications</span>
-                    @php $unreadCount = $user->unreadNotifications->count(); @endphp
-                    @if($unreadCount > 0)
-                        <span class="badge bg-danger rounded-pill ms-auto">{{ $unreadCount }}</span>
+                    @if(isset($topbarUnreadCount) && $topbarUnreadCount > 0)
+                        <span class="badge bg-danger rounded-pill ms-auto">{{ $topbarUnreadCount }}</span>
+                    @elseif(Auth::check() && Auth::user()->unreadNotifications->count() > 0)
+                        <span class="badge bg-danger rounded-pill ms-auto">{{ Auth::user()->unreadNotifications->count() }}</span>
                     @endif
                 </a>
             </li>
-            @endif
 
             {{-- Logout --}}
             <li>
@@ -667,6 +672,173 @@
             </button>
             
             <div class="topbar-right">
+                @php
+                    $navUser = Auth::user();
+                    $navPendingReminders = collect();
+                    if ($navUser && $navUser->staff) {
+                        $navPendingReminders = \App\Models\AttendanceReminder::with('subject')
+                            ->where('staff_id', $navUser->staff->id)
+                            ->where('is_used', false)
+                            ->orderByDesc('created_at')
+                            ->get();
+                    }
+                    $navUnreadDbCount = $navUser ? $navUser->unreadNotifications->count() : 0;
+                    $topbarUnreadCount = $navUnreadDbCount + $navPendingReminders->count();
+                    $recentNotifications = $navUser ? $navUser->notifications()->take(5)->get() : collect();
+                @endphp
+
+                {{-- Notification Bell Dropdown --}}
+                <div class="dropdown me-2 notification-bell-container">
+                    <button class="btn btn-light position-relative p-2 rounded-circle border-0 shadow-none notification-bell-btn" 
+                            type="button" 
+                            id="topbarNotificationDropdown" 
+                            data-bs-toggle="dropdown" 
+                            aria-expanded="false" 
+                            title="Notifications">
+                        <i class="fas fa-bell fs-5 {{ $topbarUnreadCount > 0 ? 'text-primary' : 'text-secondary' }}"></i>
+                        @if($topbarUnreadCount > 0)
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-2 border-white notification-pulse">
+                                {{ $topbarUnreadCount > 99 ? '99+' : $topbarUnreadCount }}
+                            </span>
+                        @endif
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end shadow-lg border-0 notification-dropdown-menu p-0" 
+                         aria-labelledby="topbarNotificationDropdown" 
+                         style="width: 380px; max-width: 90vw; border-radius: 14px; overflow: hidden;">
+                        
+                        {{-- Dropdown Header --}}
+                        <div class="p-3 bg-white border-bottom d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0 fw-bold text-dark d-flex align-items-center gap-2">
+                                    <i class="fas fa-bell text-primary"></i> Notifications
+                                    @if($topbarUnreadCount > 0)
+                                        <span class="badge bg-danger rounded-pill small">{{ $topbarUnreadCount }} new</span>
+                                    @endif
+                                </h6>
+                            </div>
+                            @if($navUnreadDbCount > 0)
+                                <form action="{{ route('notifications.markAllAsRead') }}" method="POST" class="d-inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none small text-primary fw-semibold">
+                                        Mark all read
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
+
+                        {{-- Dropdown Scrollable Content --}}
+                        <div class="notification-dropdown-scroll" style="max-height: 380px; overflow-y: auto;">
+                            {{-- Attendance Reminders for Teacher --}}
+                            @if($navPendingReminders->isNotEmpty())
+                                <div class="px-3 py-2 bg-warning bg-opacity-10 border-bottom border-warning">
+                                    <div class="small fw-bold text-dark d-flex align-items-center gap-1">
+                                        <i class="fas fa-clipboard-user text-warning"></i>
+                                        Attendance Marking Reminders ({{ $navPendingReminders->count() }})
+                                    </div>
+                                </div>
+                                @foreach($navPendingReminders as $rem)
+                                    <div class="p-3 border-bottom bg-warning bg-opacity-10 position-relative">
+                                        <div class="d-flex justify-content-between align-items-start mb-1">
+                                            <span class="badge bg-warning text-dark fw-bold small">
+                                                {{ $rem->class_level }}th Class ({{ $rem->admission_year }})
+                                            </span>
+                                            <span class="small text-danger fw-bold">
+                                                {{ \Carbon\Carbon::parse($rem->attendance_date)->format('d M Y') }}
+                                            </span>
+                                        </div>
+                                        <div class="fw-bold text-dark small mb-1">
+                                            {{ $rem->subject->name ?? 'Subject' }}
+                                            @if($rem->section)
+                                                <span class="badge bg-info text-dark ms-1">Sec {{ $rem->section }}</span>
+                                            @endif
+                                        </div>
+                                        <p class="small text-muted mb-2 lh-sm">
+                                            One-time permission granted by Principal to mark attendance for this date.
+                                        </p>
+                                        <a href="{{ route('attendance.create', [
+                                            'subject_id' => $rem->subject_id,
+                                            'class' => $rem->class_level,
+                                            'year' => $rem->admission_year,
+                                            'date' => \Carbon\Carbon::parse($rem->attendance_date)->toDateString(),
+                                            'section' => $rem->section,
+                                            'reminder_id' => $rem->id
+                                        ]) }}" class="btn btn-warning btn-sm w-100 fw-bold shadow-sm text-dark">
+                                            <i class="fas fa-pen-fancy me-1"></i> Mark Attendance Now
+                                        </a>
+                                    </div>
+                                @endforeach
+                            @endif
+
+                            {{-- System Notifications --}}
+                            @if($recentNotifications->isNotEmpty())
+                                <div class="list-group list-group-flush">
+                                    @foreach($recentNotifications as $notif)
+                                        @php
+                                            $nData = $notif->data;
+                                            $nUnread = $notif->unread();
+                                        @endphp
+                                        <div class="list-group-item list-group-item-action p-3 border-bottom {{ $nUnread ? 'bg-light' : '' }}">
+                                            <div class="d-flex justify-content-between align-items-start gap-2">
+                                                <div class="small">
+                                                    @if(($nData['type'] ?? '') === 'mark_change')
+                                                        <div class="fw-bold text-dark mb-1">
+                                                            <span class="badge bg-warning text-dark me-1">Marks Changed</span>
+                                                            {{ $nData['student_name'] ?? 'Student' }}
+                                                        </div>
+                                                        <div class="text-muted">
+                                                            {{ $nData['subject'] ?? 'Subject' }}: {{ $nData['prev_theory'] ?? 'N/A' }} → {{ $nData['new_theory'] ?? 'N/A' }}
+                                                        </div>
+                                                    @elseif(!empty($nData['action']))
+                                                        <div class="fw-bold text-dark mb-1">
+                                                            <span class="badge {{ $nData['action'] === 'Assigned' ? 'bg-success' : 'bg-danger' }} me-1">{{ $nData['action'] }}</span>
+                                                            {{ $nData['student_name'] ?? 'Student' }}
+                                                        </div>
+                                                        <div class="text-muted">
+                                                            {{ $nData['subject_name'] ?? 'Subject' }} ({{ $nData['admission_year'] ?? '' }})
+                                                        </div>
+                                                    @else
+                                                        <div class="fw-bold text-dark mb-1">
+                                                            {{ $nData['subject'] ?? $nData['title'] ?? 'Notification' }}
+                                                        </div>
+                                                        <div class="text-muted">
+                                                            {{ \Illuminate\Support\Str::limit($nData['body'] ?? $nData['message'] ?? '', 80) }}
+                                                        </div>
+                                                    @endif
+                                                    <div class="text-muted extra-small mt-1" style="font-size: 0.75rem;">
+                                                        <i class="far fa-clock me-1"></i>{{ $notif->created_at->diffForHumans() }}
+                                                    </div>
+                                                </div>
+                                                @if($nUnread)
+                                                    <form action="{{ route('notifications.markAsRead', $notif->id) }}" method="POST">
+                                                        @csrf
+                                                        <button type="submit" class="btn btn-sm btn-link text-muted p-0" title="Mark as Read">
+                                                            <i class="fas fa-circle text-primary" style="font-size: 0.55rem;"></i>
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+
+                            @if($navPendingReminders->isEmpty() && $recentNotifications->isEmpty())
+                                <div class="text-center py-4 px-3">
+                                    <i class="fas fa-bell-slash text-muted fs-3 mb-2"></i>
+                                    <p class="small text-muted mb-0">No new notifications</p>
+                                </div>
+                            @endif
+                        </div>
+
+                        {{-- Dropdown Footer --}}
+                        <div class="p-2 bg-light border-top text-center">
+                            <a href="{{ route('notifications.index') }}" class="btn btn-link btn-sm text-primary text-decoration-none fw-bold w-100">
+                                View All Notifications <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
                 @if(Auth::check() && $userRoles->count() > 1)
                     <div class="dropdown me-3">
                         <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="roleDropdown" data-bs-toggle="dropdown" aria-expanded="false">
@@ -712,61 +884,6 @@
                     <i class="fas fa-exclamation-circle me-2"></i>{{ session('error') }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-            @endif
-
-            {{-- Principal Attendance Reminders for Teachers --}}
-            @if(Auth::check() && Auth::user()->staff)
-                @php
-                    $pendingReminders = \App\Models\AttendanceReminder::with('subject')
-                        ->where('staff_id', Auth::user()->staff->id)
-                        ->where('is_used', false)
-                        ->orderByDesc('created_at')
-                        ->get();
-                @endphp
-                @if($pendingReminders->count() > 0)
-                    <div class="m-3">
-                        @foreach($pendingReminders as $reminder)
-                            <div class="alert alert-warning border-start border-4 border-warning shadow-sm mb-2 rounded-3">
-                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                    <div>
-                                        <h6 class="fw-bold mb-1 text-dark">
-                                            <i class="fas fa-bell text-warning me-2 fa-lg"></i>
-                                            Attendance Marking Reminder from Principal
-                                        </h6>
-                                        <div class="small text-dark">
-                                            Please mark attendance for <strong>{{ $reminder->subject->name ?? 'Subject' }}</strong> - 
-                                            <strong>{{ $reminder->class_level }}th Class ({{ $reminder->admission_year }})</strong>
-                                            @if($reminder->section)
-                                                (Section: <span class="badge bg-info text-dark">{{ $reminder->section }}</span>)
-                                            @endif
-                                            for date <strong class="text-danger">{{ \Carbon\Carbon::parse($reminder->attendance_date)->format('d F Y (l)') }}</strong>.
-                                        </div>
-                                        @if(!empty($reminder->message))
-                                            <div class="small text-muted fst-italic mt-1">
-                                                <i class="fas fa-quote-left me-1"></i>"{{ $reminder->message }}"
-                                            </div>
-                                        @endif
-                                        <div class="badge bg-light text-danger border border-danger small mt-1">
-                                            <i class="fas fa-shield-alt me-1"></i>One-Time Past Date Permission Granted
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <a href="{{ route('attendance.create', [
-                                            'subject_id' => $reminder->subject_id,
-                                            'class' => $reminder->class_level,
-                                            'year' => $reminder->admission_year,
-                                            'date' => \Carbon\Carbon::parse($reminder->attendance_date)->toDateString(),
-                                            'section' => $reminder->section,
-                                            'reminder_id' => $reminder->id
-                                        ]) }}" class="btn btn-warning btn-sm fw-bold shadow-sm">
-                                            <i class="fas fa-pen-fancy me-1"></i>Mark Attendance Now
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
             @endif
 
             @yield('content')

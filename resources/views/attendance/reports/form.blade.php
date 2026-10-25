@@ -5,9 +5,7 @@
     <div class="row justify-content-center">
         <div class="col-md-8">
             <div class="card shadow-sm border-0">
-                <div class="card-header bg-success text-white py-3">
-                    <h4 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Generate HSSC Attendance Report</h4>
-                </div>
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-calendar-alt fa-fw"></i></span><h4 class="mb-0 fw-bold text-dark">Generate HSSC Attendance Report</h4></div>
                 <div class="card-body p-4">
                     <form action="{{ route('attendance.reports.generate') }}" method="POST">
                         @csrf

@@ -2,17 +2,30 @@
 @section('title', 'Student Profile (' . $program->type . ')')
 
 @section('content')
-{{-- Page Header --}}
-<div class="bg-primary py-4 text-white mb-4">
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center">
-            <h2 class="mb-0"><i class="fas fa-user-graduate me-2"></i>Student Profile</h2>
-            <a href="{{ route('public.students-corner') }}" class="btn btn-light btn-sm">
-                <i class="fas fa-arrow-left me-1"></i>Back to Search
+{{-- Modern Collegiate Top Banner --}}
+<section class="page-hero-v2 py-4 mb-4">
+    <div class="container position-relative" style="z-index: 3;">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <span class="hero-badge mb-2 d-inline-block">
+                    <i class="fas fa-graduation-cap text-warning"></i> Higher Education Portal
+                </span>
+                <h2 class="text-white fw-bold mb-1" style="font-family: 'Playfair Display', serif;">
+                    Student Profile <span class="fw-normal text-white-50">({{ $program->type }})</span>
+                </h2>
+                <p class="text-white-50 mb-0 small">Official academic and fee credentials record</p>
+            </div>
+            <a href="{{ route('public.students-corner') }}" class="btn btn-sm btn-outline-light rounded-pill px-4 shadow-sm fw-semibold" style="backdrop-filter: blur(8px); border-color: rgba(255,255,255,0.4);">
+                <i class="fas fa-arrow-left me-1"></i> Back to Search
             </a>
         </div>
     </div>
-</div>
+    <div class="page-hero-wave">
+        <svg viewBox="0 0 1440 30" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+            <path d="M0,15 C360,30 720,0 1080,15 C1260,22 1380,12 1440,15 L1440,30 L0,30 Z" fill="#f8fafc"></path>
+        </svg>
+    </div>
+</section>
 
 <div class="container mb-5">
     {{-- Student Basic Info --}}
@@ -26,16 +39,14 @@
                              style="width: 200px; height: 200px; object-fit: cover;">
                     <h4 class="fw-bold mb-1">{{ $student->full_name }}</h4>
                     <p class="text-muted mb-0">{{ $program->name }}</p>
-                    <span class="badge bg-info mt-2">Semester {{ $admission->current_semester }}</span>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle mt-2">Semester {{ $admission->current_semester }}</span>
                 </div>
             </div>
         </div>
 
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Personal Information</h5>
-                </div>
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-user-graduate fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Personal Information</h5></div>
                 <div class="card-body p-4">
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -101,9 +112,7 @@
     {{-- Fee Vouchers --}}
     @if($student->vouchers->isNotEmpty())
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Fee Vouchers</h5>
-        </div>
+        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-file-invoice-dollar fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Fee Vouchers</h5></div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0 align-middle">
@@ -145,8 +154,7 @@
     {{-- Disciplinary & Academic Fines --}}
     @if($student->fines && $student->fines->isNotEmpty())
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Fines & Disciplinary Penalties</h5>
+        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center"><div class="d-flex align-items-center"><span class="badge bg-danger-subtle text-danger me-2 p-2 rounded-circle"><i class="fas fa-exclamation-triangle fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Fines &amp; Disciplinary Penalties</h5></div>
             @if($student->totalOutstandingFine() > 0)
                 <span class="badge bg-light text-danger fw-bold fs-6">Outstanding: Rs. {{ number_format($student->totalOutstandingFine(), 2) }}</span>
             @else
@@ -244,9 +252,7 @@
 
     {{-- Current Semester Subjects --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><i class="fas fa-book me-2"></i>Current Enrolled Subjects (Semester {{ $admission->current_semester }})</h5>
-        </div>
+        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-book fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Current Enrolled Subjects (Semester {{ $admission->current_semester }})</h5></div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -385,9 +391,7 @@
 
     {{-- Weekly Timetable --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-secondary text-white">
-            <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Weekly Timetable</h5>
-        </div>
+        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-clock fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Weekly Timetable</h5></div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-bordered mb-0 text-center align-middle">
@@ -431,9 +435,7 @@
     {{-- Upcoming Exams --}}
     @if($upcomingExams->count() > 0)
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Upcoming Exams</h5>
-        </div>
+        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-calendar-alt fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Upcoming Exams</h5></div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
@@ -449,7 +451,7 @@
                         @foreach($upcomingExams as $exam)
                         <tr>
                             <td><strong>{{ $exam->bsSubject->name }}</strong></td>
-                            <td><span class="badge bg-warning text-dark">{{ $exam->exam_type }}</span></td>
+                            <td><span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">{{ $exam->exam_type }}</span></td>
                             <td>
                                 <i class="fas fa-calendar text-primary me-2"></i>
                                 {{ $exam->formatted_date }}

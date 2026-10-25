@@ -266,7 +266,7 @@
 
             <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="100">
                 <div class="stat-band-card s1">
-                    <div class="stat-band-icon mx-auto" style="background:linear-gradient(135deg,#3b82f6,#1d4ed8);">
+                    <div class="stat-band-icon mx-auto" style="background:linear-gradient(135deg, var(--col-primary), var(--col-hover));">
                         <i class="fas fa-user-graduate text-white"></i>
                     </div>
                     <div>
@@ -279,7 +279,7 @@
 
             <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="200">
                 <div class="stat-band-card s2">
-                    <div class="stat-band-icon mx-auto" style="background:linear-gradient(135deg,#f59e0b,#d97706);">
+                    <div class="stat-band-icon mx-auto" style="background:linear-gradient(135deg, var(--col-secondary), var(--col-mint));">
                         <i class="fas fa-chalkboard-teacher text-white"></i>
                     </div>
                     <div>
@@ -292,7 +292,7 @@
 
             <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="300">
                 <div class="stat-band-card s3">
-                    <div class="stat-band-icon mx-auto" style="background:linear-gradient(135deg,#10b981,#059669);">
+                    <div class="stat-band-icon mx-auto" style="background:linear-gradient(135deg, color-mix(in srgb, var(--col-primary) 70%, var(--col-secondary)), var(--col-secondary));">
                         <i class="fas fa-award text-white"></i>
                     </div>
                     <div>
@@ -305,7 +305,7 @@
 
             <div class="col-md-3 col-6" data-aos="fade-up" data-aos-delay="400">
                 <div class="stat-band-card s4">
-                    <div class="stat-band-icon mx-auto" style="background:linear-gradient(135deg,#ef4444,#b91c1c);">
+                    <div class="stat-band-icon mx-auto" style="background:linear-gradient(135deg, var(--col-dark), var(--col-primary));">
                         <i class="fas fa-university text-white"></i>
                     </div>
                     <div>
@@ -428,12 +428,12 @@
         <div class="row g-4">
             @php
             $features = [
-                ['icon'=>'fas fa-users-cog','label'=>'Expert Faculty','desc'=>'Highly qualified and dedicated teachers committed to unlocking every student\'s potential.','bg'=>'linear-gradient(135deg,#3b82f6,#1d4ed8)','cls'=>'fc-bg-1','num'=>'01'],
-                ['icon'=>'fas fa-laptop-code','label'=>'Modern Curriculum','desc'=>'Up-to-date syllabi aligned with both national standards and global educational benchmarks.','bg'=>'linear-gradient(135deg,#8b5cf6,#6d28d9)','cls'=>'fc-bg-2','num'=>'02'],
-                ['icon'=>'fas fa-seedling','label'=>'Holistic Development','desc'=>'Co-curricular activities that foster creativity, leadership, sports, and cultural values.','bg'=>'linear-gradient(135deg,#10b981,#059669)','cls'=>'fc-bg-3','num'=>'03'],
-                ['icon'=>'fas fa-flask','label'=>'Research Focus','desc'=>'State-of-the-art labs encouraging scientific inquiry, innovation, and analytical thinking.','bg'=>'linear-gradient(135deg,#f59e0b,#d97706)','cls'=>'fc-bg-4','num'=>'04'],
-                ['icon'=>'fas fa-hands-helping','label'=>'Community Values','desc'=>'Strong emphasis on ethics, service, civic responsibility, and national identity.','bg'=>'linear-gradient(135deg,#ef4444,#b91c1c)','cls'=>'fc-bg-5','num'=>'05'],
-                ['icon'=>'fas fa-briefcase','label'=>'Career Ready','desc'=>'Comprehensive guidance and real-world exposure to prepare students for life beyond college.','bg'=>'linear-gradient(135deg,#06b6d4,#0284c7)','cls'=>'fc-bg-6','num'=>'06'],
+                ['icon'=>'fas fa-users-cog','label'=>'Expert Faculty','desc'=>'Highly qualified and dedicated teachers committed to unlocking every student\'s potential.','bg'=>'linear-gradient(135deg, var(--col-primary), var(--col-hover))','cls'=>'fc-bg-1','num'=>'01'],
+                ['icon'=>'fas fa-laptop-code','label'=>'Modern Curriculum','desc'=>'Up-to-date syllabi aligned with both national standards and global educational benchmarks.','bg'=>'linear-gradient(135deg, var(--col-secondary), var(--col-mint))','cls'=>'fc-bg-2','num'=>'02'],
+                ['icon'=>'fas fa-seedling','label'=>'Holistic Development','desc'=>'Co-curricular activities that foster creativity, leadership, sports, and cultural values.','bg'=>'linear-gradient(135deg, color-mix(in srgb, var(--col-primary) 70%, var(--col-secondary)), var(--col-secondary))','cls'=>'fc-bg-3','num'=>'03'],
+                ['icon'=>'fas fa-flask','label'=>'Research Focus','desc'=>'State-of-the-art labs encouraging scientific inquiry, innovation, and analytical thinking.','bg'=>'linear-gradient(135deg, var(--col-dark), var(--col-primary))','cls'=>'fc-bg-4','num'=>'04'],
+                ['icon'=>'fas fa-hands-helping','label'=>'Community Values','desc'=>'Strong emphasis on ethics, service, civic responsibility, and national identity.','bg'=>'linear-gradient(135deg, var(--col-primary), var(--col-secondary))','cls'=>'fc-bg-5','num'=>'05'],
+                ['icon'=>'fas fa-briefcase','label'=>'Career Ready','desc'=>'Comprehensive guidance and real-world exposure to prepare students for life beyond college.','bg'=>'linear-gradient(135deg, var(--col-secondary), var(--col-dark))','cls'=>'fc-bg-6','num'=>'06'],
             ];
             @endphp
 

@@ -2,21 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AdmissionSetting;
 use App\Models\AdmissionApplication;
-use App\Models\FeeVoucher;
-use App\Models\BiseRecord;
-use App\Models\Subject;
-use App\Models\BloodGroup;
-use App\Models\Quota;
+use App\Models\AdmissionSetting;
 use App\Models\InstituteSetting;
-use App\Models\SubjectGroup;
-use App\Models\Program;
+use App\Services\AdmissionApplicationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class PublicAdmissionController extends Controller
 {
+    public function __construct(
+        protected AdmissionApplicationService $applicationService
+    ) {}
+
     /**
      * Show the public admission form
      */
@@ -27,29 +25,8 @@ class PublicAdmissionController extends Controller
             return view('public.apply-closed', compact('program'));
         }
 
-        $bises = BiseRecord::all();
-        $bloodGroups = BloodGroup::all();
-        $quotas = Quota::all();
-        $settings = AdmissionSetting::getForProgram($program);
-
-        if (in_array($program, ['ADP', 'BS'])) {
-            // HE programs: load available programs and HSSC groups from DB
-            $programs = Program::where('type', $program)->get();
-            $hsscGroups = SubjectGroup::whereNull('deleted_at')->orderBy('name')->pluck('name');
-            $subjects = collect();
-            $subjectGroups = collect();
-        } else {
-            // Inter: load elective subjects and subject groups
-            $programs = collect();
-            $hsscGroups = collect();
-            $subjects = Subject::where('type', 'Elective')->orderBy('name')->get();
-            $subjectGroups = SubjectGroup::with('subjects')->get();
-        }
-
-        return view('public.apply', compact(
-            'bises', 'subjects', 'bloodGroups', 'quotas', 'settings',
-            'subjectGroups', 'program', 'programs', 'hsscGroups'
-        ));
+        $data = $this->applicationService->getPublicFormData($program);
+        return view('public.apply', $data);
     }
 
     /**
@@ -69,7 +46,7 @@ class PublicAdmissionController extends Controller
         return response()->json([
             'subject_names' => $subjects->pluck('name'),
             'subject_ids' => $subjects->pluck('id'),
-            'subjects' => $subjects->pluck('name') // For backward compatibility
+            'subjects' => $subjects->pluck('name')
         ]);
     }
 
@@ -85,37 +62,23 @@ class PublicAdmissionController extends Controller
         }
 
         $isHe = in_array($program, ['ADP', 'BS']);
-
         $validated = $this->validateApplication($request, $isHe);
 
         try {
-            $settings = AdmissionSetting::getForProgram($program);
-            $admissionYear = $settings->admission_year ?? date('Y');
+            $files = array_filter([
+                'picture' => $request->file('picture'),
+                'ssc_result_card' => $request->file('ssc_result_card'),
+                'b_form_pic' => $request->file('b_form_pic'),
+                'father_cnic_pic' => $request->file('father_cnic_pic'),
+            ]);
 
-            $data = $validated;
-            $data['picture'] = $request->file('picture')->store('application_pictures', 'public');
-            $data['ssc_result_card'] = $request->file('ssc_result_card')->store('application_docs', 'public');
-            $data['b_form_pic'] = $request->file('b_form_pic')->store('application_docs', 'public');
-            $data['father_cnic_pic'] = $request->file('father_cnic_pic')->store('application_docs', 'public');
-
-            $data['application_number'] = AdmissionApplication::generateApplicationNumber($admissionYear);
-            $data['source'] = 'online';
-            $data['status'] = 'submitted';
-            $data['admission_year'] = $admissionYear;
-            $data['program_type'] = $program;
-            
-            $application = AdmissionApplication::create($data);
-
-            // Auto-classify subject group for Inter only
-            if (!$isHe) {
-                $application->updateSubjectGroup();
-            }
+            $application = $this->applicationService->createOnlineApplication($validated, $files, $program);
 
             return redirect()->route('apply.status', ['search_term' => $application->application_number])
                 ->with('success', 'Your application has been submitted successfully! Your application number is ' . $application->application_number);
 
         } catch (\Exception $e) {
-            \Log::error('Online application failed: ' . $e->getMessage());
+            Log::error('Online application failed: ' . $e->getMessage());
             return redirect()->back()->withInput()
                 ->with('error', 'An error occurred while submitting your application: ' . $e->getMessage());
         }
@@ -136,29 +99,9 @@ class PublicAdmissionController extends Controller
         }
 
         $program = $application->program_type ?? 'Inter';
-        $isHe = in_array($program, ['ADP', 'BS']);
+        $data = $this->applicationService->getPublicFormData($program, $application, $searchTerm);
 
-        $bises = BiseRecord::all();
-        $bloodGroups = BloodGroup::all();
-        $quotas = Quota::all();
-        $settings = InstituteSetting::getSettings();
-
-        if ($isHe) {
-            $programs = Program::where('type', $program)->get();
-            $hsscGroups = SubjectGroup::whereNull('deleted_at')->orderBy('name')->pluck('name');
-            $subjects = collect();
-            $subjectGroups = collect();
-        } else {
-            $programs = collect();
-            $hsscGroups = collect();
-            $subjects = Subject::where('type', 'Elective')->orderBy('name')->get();
-            $subjectGroups = SubjectGroup::with('subjects')->get();
-        }
-
-        return view('public.apply', compact(
-            'application', 'bises', 'subjects', 'bloodGroups', 'quotas',
-            'settings', 'searchTerm', 'subjectGroups', 'program', 'programs', 'hsscGroups'
-        ));
+        return view('public.apply', $data);
     }
 
     /**
@@ -172,38 +115,23 @@ class PublicAdmissionController extends Controller
 
         $program = $application->program_type ?? 'Inter';
         $isHe = in_array($program, ['ADP', 'BS']);
-
         $validated = $this->validateApplication($request, $isHe, $application);
 
         try {
-            $data = $validated;
-            
-            if ($request->hasFile('picture')) {
-                $data['picture'] = $request->file('picture')->store('application_pictures', 'public');
-            }
-            if ($request->hasFile('ssc_result_card')) {
-                $data['ssc_result_card'] = $request->file('ssc_result_card')->store('application_docs', 'public');
-            }
-            if ($request->hasFile('b_form_pic')) {
-                $data['b_form_pic'] = $request->file('b_form_pic')->store('application_docs', 'public');
-            }
-            if ($request->hasFile('father_cnic_pic')) {
-                $data['father_cnic_pic'] = $request->file('father_cnic_pic')->store('application_docs', 'public');
-            }
+            $files = array_filter([
+                'picture' => $request->file('picture'),
+                'ssc_result_card' => $request->file('ssc_result_card'),
+                'b_form_pic' => $request->file('b_form_pic'),
+                'father_cnic_pic' => $request->file('father_cnic_pic'),
+            ]);
 
-            $data['status'] = 'submitted';
-            $data['review_remarks'] = "--- Application Corrected on " . now()->format('d M Y h:i A') . " ---\n" . ($application->review_remarks ?? '');
-
-            $application->update($data);
-            if (!$isHe) {
-                $application->updateSubjectGroup();
-            }
+            $this->applicationService->correctRejectedApplication($application, $validated, $files);
 
             return redirect()->route('apply.status', ['search_term' => $application->application_number])
                 ->with('success', 'Your application has been corrected and resubmitted successfully.');
 
         } catch (\Exception $e) {
-            \Log::error('Correction failed: ' . $e->getMessage());
+            Log::error('Correction failed: ' . $e->getMessage());
             return redirect()->back()->withInput()
                 ->with('error', 'An error occurred while correcting your application.');
         }
@@ -246,15 +174,11 @@ class PublicAdmissionController extends Controller
         }
 
         try {
-            $path = $request->file('paid_voucher')->store('paid_vouchers', 'public');
-
-            $application->update([
-                'paid_voucher_path' => $path,
-            ]);
+            $this->applicationService->uploadPaidVoucher($application, $request->file('paid_voucher'));
 
             return back()->with('success', 'Paid voucher uploaded successfully! The clerk will verify your payment.');
         } catch (\Exception $e) {
-            \Log::error('Voucher upload failed: ' . $e->getMessage());
+            Log::error('Voucher upload failed: ' . $e->getMessage());
             return back()->with('error', 'Failed to upload voucher. Please try again.');
         }
     }
@@ -275,12 +199,8 @@ class PublicAdmissionController extends Controller
         return view('pdfs.fee-voucher', compact('application', 'settings', 'voucher'));
     }
 
-    // =========================================================================
-    // PRIVATE HELPERS
-    // =========================================================================
-
     /**
-     * Build and run validation rules, branching on program type.
+     * Build and run validation rules.
      */
     private function validateApplication(Request $request, bool $isHe, ?AdmissionApplication $existing = null): array
     {
@@ -298,111 +218,54 @@ class PublicAdmissionController extends Controller
             'father_name' => ['required', 'string', 'max:120', 'regex:/^[a-zA-Z\s]+$/'],
             'father_cnic' => ['nullable', 'string', 'regex:/^\d{5}-\d{7}-\d{1}$/'],
             'father_contact' => ['nullable', 'string', 'regex:/^03\d{2}-\d{7}$/'],
-            'father_occupation' => ['nullable', 'string', 'max:120', 'regex:/^[a-zA-Z\s]*$/'],
-            'father_annual_income' => 'nullable|integer',
-            'student_contact' => ['required', 'string', 'regex:/^03\d{2}-\d{7}$/'],
+            'father_occupation' => 'nullable|string|max:100',
+            'father_annual_income' => 'nullable|numeric|min:0',
+            'student_contact' => ['nullable', 'string', 'regex:/^03\d{2}-\d{7}$/'],
             'whatsapp_no' => ['nullable', 'string', 'regex:/^03\d{2}-\d{7}$/'],
-            'email' => 'nullable|email:filter|max:120',
-            'address' => 'required|string',
+            'email' => 'nullable|email|max:100',
+            'address' => 'required|string|max:255',
             'blood_group_id' => 'nullable|exists:blood_groups,id',
             'quota_id' => 'nullable|exists:quotas,id',
-            'picture' => $isUpdate ? 'nullable|image|max:2048' : 'required|image|max:2048',
-            'ssc_result_card' => $isUpdate ? 'nullable|image|max:5120' : 'required|image|max:5120',
-            'b_form_pic' => $isUpdate ? 'nullable|image|max:5120' : 'required|image|max:5120',
-            'father_cnic_pic' => $isUpdate ? 'nullable|image|max:5120' : 'required|image|max:5120',
-        ];
-
-        $sscRules = [
-            'bise_id' => 'required|exists:bise_records,id',
-            'ssc_roll_no' => 'required|numeric|min:0',
-            'ssc_reg_no' => [
-                'required', 'string', 'max:50',
-                function ($attribute, $value, $fail) use ($request, $existing) {
-                    $rollNo = $request->input('ssc_roll_no');
-                    if (!$rollNo) return;
-
-                    $existsInStudents = \App\Models\SscRecord::where('roll_no', $rollNo)
-                        ->where('reg_no', $value)->exists();
-                    if ($existsInStudents) {
-                        $fail('This student (SSC Roll/Reg) is already admitted in the system.');
-                        return;
-                    }
-
-                    $query = AdmissionApplication::where('ssc_roll_no', $rollNo)
-                        ->where('ssc_reg_no', $value)
-                        ->where('status', '!=', 'rejected');
-                    if ($existing) {
-                        $query->where('id', '!=', $existing->id);
-                    }
-                    if ($query->exists()) {
-                        $fail('An application with this SSC Roll and Registration number already exists.');
-                    }
-                }
-            ],
-            'ssc_school_name' => 'required|string|max:255',
-            'ssc_total_marks' => 'required|numeric|min:1',
-            'ssc_obtained_marks' => [
-                'required', 'numeric', 'min:0', 'lte:ssc_total_marks',
-                function ($attribute, $value, $fail) use ($request) {
-                    $total = floatval($request->input('ssc_total_marks'));
-                    if ($total > 0 && floatval($value) < ($total * 0.33)) {
-                        $fail('Obtained marks must be at least 33% of total marks.');
-                    }
-                }
-            ],
-            'ssc_passing_year' => ['required', 'digits:4', 'integer', 'min:' . (date('Y') - 10), 'max:' . date('Y')],
-            'ssc_passing_session' => 'required|in:1st Annual,2nd Annual',
-            'ssc_group' => 'required|string',
+            'shift' => 'required|in:Morning,Evening',
+            'ssc_passed' => 'required|in:Passed,Failed,Result Awaited',
+            'ssc_roll_no' => 'required|string|max:50',
+            'ssc_reg_no' => 'required|string|max:50',
+            'ssc_bise_id' => 'required|exists:bise_records,id',
+            'ssc_passing_year' => 'required|integer|min:2000|max:' . (date('Y')),
+            'ssc_passing_session' => 'required|in:Annual,Supplementary',
+            'ssc_school_name' => 'required|string|max:200',
+            'ssc_group' => 'required|in:Science,Arts,Humanities,Computer Science,General,Technical',
+            'ssc_total_marks' => 'required|integer|min:1',
+            'ssc_obtained_marks' => 'required|integer|min:0|lte:ssc_total_marks',
+            'picture' => $isUpdate ? 'nullable|image|mimes:jpeg,jpg,png|max:2048' : 'required|image|mimes:jpeg,jpg,png|max:2048',
+            'ssc_result_card' => $isUpdate ? 'nullable|file|mimes:jpeg,jpg,png,pdf|max:3072' : 'required|file|mimes:jpeg,jpg,png,pdf|max:3072',
+            'b_form_pic' => $isUpdate ? 'nullable|file|mimes:jpeg,jpg,png,pdf|max:3072' : 'required|file|mimes:jpeg,jpg,png,pdf|max:3072',
+            'father_cnic_pic' => $isUpdate ? 'nullable|file|mimes:jpeg,jpg,png,pdf|max:3072' : 'required|file|mimes:jpeg,jpg,png,pdf|max:3072',
         ];
 
         if ($isHe) {
-            // ADP/BS: program selection + HSSC record
             $heRules = [
                 'program_id' => 'required|exists:programs,id',
+                'hssc_passed' => 'required|in:Passed,Result Awaited',
+                'hssc_roll_no' => 'required|string|max:50',
+                'hssc_reg_no' => 'nullable|string|max:50',
                 'hssc_bise_id' => 'required|exists:bise_records,id',
-                'hssc_roll_no' => 'required|numeric|min:0',
-                'hssc_reg_no' => 'required|string|max:50',
-                'hssc_college_name' => 'required|string|max:255',
-                'hssc_total_marks' => 'required|numeric|min:1',
-                'hssc_obtained_marks' => [
-                    'required', 'numeric', 'min:0', 'lte:hssc_total_marks',
-                    function ($attribute, $value, $fail) use ($request) {
-                        $total = floatval($request->input('hssc_total_marks'));
-                        if ($total > 0 && floatval($value) < ($total * 0.33)) {
-                            $fail('HSSC obtained marks must be at least 33% of total marks.');
-                        }
-                    }
-                ],
-                'hssc_passing_year' => ['required', 'digits:4', 'integer', 'min:' . (date('Y') - 10), 'max:' . date('Y')],
-                'hssc_passing_session' => 'required|in:1st Annual,2nd Annual',
+                'hssc_passing_year' => 'required|integer|min:2000|max:' . date('Y'),
+                'hssc_passing_session' => 'required|in:Annual,Supplementary',
+                'hssc_college_name' => 'required|string|max:200',
                 'hssc_group' => 'required|string|max:100',
+                'hssc_total_marks' => 'required|integer|min:1',
+                'hssc_obtained_marks' => 'required|integer|min:0|lte:hssc_total_marks',
             ];
-
-            $rules = array_merge($commonRules, $sscRules, $heRules);
-        } else {
-            // Inter: elective subjects + subject group
-            $interRules = [
-                'subject_group_id' => 'required|exists:subject_groups,id',
-                'elective_subject_1' => 'required|exists:subjects,id',
-                'elective_subject_2' => 'required|exists:subjects,id|different:elective_subject_1',
-                'elective_subject_3' => 'required|exists:subjects,id|different:elective_subject_1|different:elective_subject_2',
-            ];
-            $rules = array_merge($commonRules, $sscRules, $interRules);
+            return $request->validate(array_merge($commonRules, $heRules));
         }
 
-        return $request->validate($rules, [
-            'first_name.regex' => 'The first name must only contain letters and spaces.',
-            'last_name.regex' => 'The last name must only contain letters and spaces.',
-            'father_name.regex' => 'The father name must only contain letters and spaces.',
-            'father_occupation.regex' => 'The occupation must only contain letters and spaces.',
-            'cnic.regex' => 'The CNIC must follow the format 00000-0000000-0.',
-            'father_cnic.regex' => 'The Father CNIC must follow the format 00000-0000000-0.',
-            'student_contact.regex' => 'The contact number must follow the format 03XX-XXXXXXX.',
-            'father_contact.regex' => 'The father contact number must follow the format 03XX-XXXXXXX.',
-            'whatsapp_no.regex' => 'The WhatsApp number must follow the format 03XX-XXXXXXX.',
-            'ssc_result_card.required' => 'The SSC Result Card image is required.',
-            'b_form_pic.required' => 'B-Form/CNIC Picture is required.',
-            'father_cnic_pic.required' => "Father's CNIC Picture is required.",
-        ]);
+        $interRules = [
+            'elective_subject_1_id' => 'required|exists:subjects,id',
+            'elective_subject_2_id' => 'required|exists:subjects,id|different:elective_subject_1_id',
+            'elective_subject_3_id' => 'required|exists:subjects,id|different:elective_subject_1_id|different:elective_subject_2_id',
+        ];
+
+        return $request->validate(array_merge($commonRules, $interRules));
     }
 }

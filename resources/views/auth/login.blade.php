@@ -22,15 +22,8 @@
     {{-- Custom Styles --}}
     <link href="{{ asset('css/custom.css') }}?v={{ filemtime(public_path('css/custom.css')) }}" rel="stylesheet">
 
+    @include('layouts.dynamic-theme')
     <style>
-    :root {
-        --col-primary: {{ $colors['primary'] }};
-        --col-accent: {{ $colors['secondary'] }};
-        --col-dark: color-mix(in srgb, {{ $colors['primary'] }} 60%, black);
-    }
-    body {
-        font-family: 'Outfit', sans-serif;
-    }
     .btn-login-v2 {
         background: linear-gradient(135deg, var(--col-primary), var(--col-dark)) !important;
         color: #ffffff !important;

@@ -52,6 +52,9 @@ class ColorSettingsController extends Controller
             ]));
         }
 
+        \Illuminate\Support\Facades\Cache::forget('institute_settings');
+        try { \Illuminate\Support\Facades\Artisan::call('view:clear'); } catch (\Exception $e) {}
+
         return redirect()->back()->with('success', 'Color settings updated successfully!');
     }
 
@@ -70,6 +73,8 @@ class ColorSettingsController extends Controller
                 'color_success' => '#68c170',
             ]);
         }
+        \Illuminate\Support\Facades\Cache::forget('institute_settings');
+        try { \Illuminate\Support\Facades\Artisan::call('view:clear'); } catch (\Exception $e) {}
 
         return redirect()->back()->with('success', 'Colors reset to defaults successfully!');
     }

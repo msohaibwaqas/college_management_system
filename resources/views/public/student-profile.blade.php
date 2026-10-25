@@ -2,17 +2,25 @@
 @section('title', 'Student Profile')
 
 @section('content')
-{{-- Page Header --}}
-<div class="bg-primary py-4 text-white mb-4">
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center">
-            <h2 class="mb-0"><i class="fas fa-user-graduate me-2"></i>Student Profile</h2>
-            <a href="{{ route('public.students-corner') }}" class="btn btn-light btn-sm">
-                <i class="fas fa-arrow-left me-1"></i>Back to Search
-            </a>
+{{-- Collegiate Profile Hero Banner --}}
+<section class="page-hero-v2 text-center py-4 mb-4">
+    <div class="container position-relative" style="z-index: 3;">
+        <div class="mb-2">
+            <span class="hero-badge">
+                <i class="fas fa-user-graduate text-warning"></i> Academic Record &amp; Profile
+            </span>
         </div>
+        <h1 class="mb-1 text-white fw-bold">{{ $student->full_name }}</h1>
+        <p class="lead mb-3 text-white-50">
+            Roll No: <strong class="text-white">{{ $admission->college_roll_no ?? 'N/A' }}</strong> &bull; 
+            Class: <strong class="text-white">{{ $admission->current_class ? 'Class ' . $admission->current_class : 'Student' }}</strong> &bull; 
+            Session: <strong class="text-white">{{ $admission->admission_year }}</strong>
+        </p>
+        <a href="{{ route('public.students-corner') }}" class="btn btn-sm btn-outline-light rounded-pill px-4 shadow-sm fw-semibold" style="backdrop-filter: blur(8px); border-color: rgba(255,255,255,0.4);">
+            <i class="fas fa-arrow-left me-1"></i> Back to Search
+        </a>
     </div>
-</div>
+</section>
 
 <div class="container mb-5">
     {{-- ====================================================
@@ -67,9 +75,9 @@
     {{-- Struck-Off History Table (always shown if any history exists) --}}
     @if($allStruckOffLogs->isNotEmpty())
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-dark text-white d-flex align-items-center justify-content-between">
-            <h5 class="mb-0">
-                <i class="fas fa-history me-2"></i>Struck-Off History
+        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+            <h5 class="mb-0 fw-bold text-dark">
+                <i class="fas fa-history text-danger me-2"></i>Struck-Off History
             </h5>
             <span class="badge bg-danger">{{ $allStruckOffLogs->count() }} Record(s)</span>
         </div>
@@ -150,8 +158,8 @@
 
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Personal Information</h5>
+                <div class="card-header bg-white border-bottom py-3">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-user text-primary me-2"></i>Personal Information</h5>
                 </div>
                 <div class="card-body p-4">
                     <div class="row g-3">
@@ -217,8 +225,8 @@
 
     {{-- SSC Record --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><i class="fas fa-graduation-cap me-2"></i>SSC Record</h5>
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-graduation-cap text-primary me-2"></i>SSC Record</h5>
         </div>
         <div class="card-body p-4">
             <div class="row g-3">
@@ -241,8 +249,8 @@
     {{-- Fee Vouchers --}}
     @if($student->vouchers->isNotEmpty())
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Fee Vouchers</h5>
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-file-invoice-dollar text-primary me-2"></i>Fee Vouchers</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -285,8 +293,8 @@
     {{-- Disciplinary & Academic Fines --}}
     @if($student->fines && $student->fines->isNotEmpty())
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Fines & Disciplinary Penalties</h5>
+        <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-exclamation-triangle text-danger me-2"></i>Fines &amp; Disciplinary Penalties</h5>
             @if($student->totalOutstandingFine() > 0)
                 <span class="badge bg-light text-danger fw-bold fs-6">Outstanding: Rs. {{ number_format($student->totalOutstandingFine(), 2) }}</span>
             @else
@@ -384,8 +392,8 @@
 
     {{-- Compulsory Subjects --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="fas fa-book me-2"></i>Compulsory Subjects</h5>
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-book text-primary me-2"></i>Compulsory Subjects</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -431,8 +439,8 @@
 
     {{-- Elective Subjects --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-warning text-dark">
-            <h5 class="mb-0"><i class="fas fa-book-open me-2"></i>Elective Subjects</h5>
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-book-open text-primary me-2"></i>Elective Subjects</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -478,8 +486,8 @@
 
     {{-- College Test Results --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-dark text-white">
-            <h5 class="mb-0"><i class="fas fa-list-check me-2"></i>College Test Results</h5>
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-list-check text-primary me-2"></i>College Test Results</h5>
         </div>
         <div class="card-body p-4">
             @php
@@ -541,8 +549,8 @@
 
     {{-- Final Results --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-danger text-white">
-            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Final Results</h5>
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-chart-line text-primary me-2"></i>Final Results</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -719,8 +727,8 @@
 
     {{-- Personal Weekly Timetable --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-secondary text-white">
-            <h5 class="mb-0"><i class="fas fa-clock me-2"></i>My Weekly Timetable</h5>
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-clock text-primary me-2"></i>My Weekly Timetable</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -776,8 +784,8 @@
 
     {{-- Upcoming Exams --}}
     <div class="card border-0 shadow-sm mb-4">
-        <div class="card-header bg-info text-white">
-            <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Upcoming Exams</h5>
+        <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-calendar-alt text-primary me-2"></i>Upcoming Exams</h5>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">

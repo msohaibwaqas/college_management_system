@@ -4,44 +4,72 @@
 
 @section('content')
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
         <h4 class="mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Fee Vouchers</h4>
         <a href="{{ route('vouchers.bulk-class12') }}" class="btn btn-primary">
             <i class="fas fa-plus-circle me-1"></i>Bulk Class 12 Vouchers
         </a>
     </div>
     <div class="card-body">
-        {{-- Stats Row --}}
-        <div class="row mb-4">
-            <div class="col-md-3">
-                <div class="card bg-warning text-dark">
-                    <div class="card-body text-center py-2">
-                        <h5 class="mb-0">{{ $totalPending }}</h5>
-                        <small>Pending Vouchers</small>
+        {{-- Unified Executive KPI Metrics Row --}}
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 report-kpi-card secondary">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted text-uppercase fw-bold small" style="font-size: 0.72rem;">Pending Vouchers</span>
+                                <h4 class="fw-bold mb-0 mt-1 text-dark">{{ number_format($totalPending) }}</h4>
+                            </div>
+                            <div class="badge bg-secondary-subtle text-secondary p-2 rounded-circle">
+                                <i class="fas fa-clock fa-lg"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card bg-success text-white">
-                    <div class="card-body text-center py-2">
-                        <h5 class="mb-0">{{ $totalPaid }}</h5>
-                        <small>Paid Vouchers</small>
+            <div class="col-md-3 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 report-kpi-card success">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted text-uppercase fw-bold small" style="font-size: 0.72rem;">Paid Vouchers</span>
+                                <h4 class="fw-bold mb-0 mt-1 text-success">{{ number_format($totalPaid) }}</h4>
+                            </div>
+                            <div class="badge bg-success-subtle text-success p-2 rounded-circle">
+                                <i class="fas fa-check-circle fa-lg"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card bg-danger text-white">
-                    <div class="card-body text-center py-2">
-                        <h5 class="mb-0">Rs. {{ number_format($pendingAmount) }}</h5>
-                        <small>Pending Amount</small>
+            <div class="col-md-3 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 report-kpi-card highlight">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted text-uppercase fw-bold small" style="font-size: 0.72rem;">Pending Amount</span>
+                                <h4 class="fw-bold mb-0 mt-1 text-dark">Rs. {{ number_format($pendingAmount) }}</h4>
+                            </div>
+                            <div class="badge bg-warning-subtle text-warning p-2 rounded-circle">
+                                <i class="fas fa-exclamation-circle fa-lg"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3">
-                <div class="card bg-info text-white">
-                    <div class="card-body text-center py-2">
-                        <h5 class="mb-0">Rs. {{ number_format($collectedAmount) }}</h5>
-                        <small>Collected Amount</small>
+            <div class="col-md-3 col-sm-6">
+                <div class="card border-0 shadow-sm h-100 report-kpi-card">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="text-muted text-uppercase fw-bold small" style="font-size: 0.72rem;">Collected Amount</span>
+                                <h4 class="fw-bold mb-0 mt-1 text-primary">Rs. {{ number_format($collectedAmount) }}</h4>
+                            </div>
+                            <div class="badge bg-primary-subtle text-primary p-2 rounded-circle">
+                                <i class="fas fa-coins fa-lg"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -106,7 +134,7 @@
             {{-- Table --}}
             <div class="table-responsive">
                 <table class="table table-hover table-striped align-middle">
-                    <thead class="table-dark">
+                    <thead class="table-light">
                         <tr>
                             <th><input type="checkbox" id="selectAll"></th>
                             <th>Voucher #</th>
@@ -144,13 +172,13 @@
                             </td>
                             <td>
                                 @if(str_contains($voucher->remarks ?? '', 'Fine'))
-                                    <span class="badge bg-danger">Fine</span>
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Fine</span>
                                 @elseif(str_contains($voucher->remarks ?? '', 'Class 12'))
-                                    <span class="badge bg-primary">Class 12</span>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Class 12</span>
                                 @elseif(str_contains($voucher->remarks ?? '', 'Subject Change'))
-                                    <span class="badge bg-info">Subject Change</span>
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Subject Change</span>
                                 @else
-                                    <span class="badge bg-secondary">Admission</span>
+                                    <span class="badge bg-light text-dark border">Admission</span>
                                 @endif
                             </td>
                             <td class="text-end">Rs. {{ number_format($voucher->amount) }}</td>

@@ -4,7 +4,7 @@
 
 @section('content')
 <div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
         <h4 class="mb-0"><i class="fas fa-file-invoice me-2"></i>Voucher: {{ $voucher->voucher_number }}</h4>
         <div>
             <a href="{{ route('students.vouchers.download', $voucher) }}" class="btn btn-outline-secondary" target="_blank">
@@ -20,7 +20,7 @@
             {{-- Voucher Info --}}
             <div class="col-md-6">
                 <div class="card mb-3">
-                    <div class="card-header bg-primary text-white"><h5 class="mb-0">Voucher Information</h5></div>
+                    <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-info-circle fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Voucher Information</h5></div>
                     <div class="card-body">
                         <table class="table table-borderless mb-0">
                             <tr><th width="40%">Voucher Number</th><td>{{ $voucher->voucher_number }}</td></tr>
@@ -54,7 +54,7 @@
             {{-- Financial Summary --}}
             <div class="col-md-6">
                 <div class="card mb-3">
-                    <div class="card-header bg-success text-white"><h5 class="mb-0">Financial Summary</h5></div>
+                    <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-chart-line fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Financial Summary</h5></div>
                     <div class="card-body">
                         <table class="table table-borderless mb-0">
                             <tr><th width="40%">Total Amount</th><td class="fs-5"><strong>Rs. {{ number_format($voucher->amount) }}</strong></td></tr>
@@ -75,7 +75,7 @@
                 {{-- Confirm Payment --}}
                 @if($voucher->status === 'pending')
                 <div class="card mb-3 border-success">
-                    <div class="card-header bg-success text-white"><h5 class="mb-0"><i class="fas fa-check-circle me-1"></i>Confirm Payment</h5></div>
+                    <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-success-subtle text-success me-2 p-2 rounded-circle"><i class="fas fa-check-circle fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Confirm Payment</h5></div>
                     <div class="card-body">
                         <form action="{{ route('vouchers.confirm', $voucher) }}" method="POST">
                             @csrf
@@ -102,7 +102,7 @@
 
         {{-- Voucher Items --}}
         <div class="card mt-3">
-            <div class="card-header bg-dark text-white"><h5 class="mb-0">Voucher Items</h5></div>
+            <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-list-ol fa-fw"></i></span><h5 class="mb-0 fw-bold text-dark">Voucher Items</h5></div>
             <div class="card-body p-0">
                 <table class="table table-striped mb-0">
                     <thead>

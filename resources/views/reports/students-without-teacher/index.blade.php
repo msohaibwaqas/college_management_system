@@ -12,7 +12,7 @@
     <div class="row">
         <div class="col-md-8 mx-auto">
             <div class="card shadow-sm">
-                <div class="card-header bg-warning text-dark">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">Generate Report</h5>
                 </div>
                 <div class="card-body">
@@ -41,7 +41,7 @@
                                 <option value="all">-- All Subjects (Show All Students With Missing Teachers) --</option>
                             </select>
                             <div id="subjectLoading" class="text-center mt-2" style="display: none;">
-                                <div class="spinner-border spinner-border-sm text-warning" role="status">
+                                <div class="spinner-border spinner-border-sm text-primary" role="status">
                                     <span class="visually-hidden">Loading...</span>
                                 </div>
                                 <span class="ms-2">Loading subjects...</span>
@@ -49,7 +49,7 @@
                         </div>
 
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-warning btn-lg">
+                            <button type="submit" class="btn btn-primary btn-lg">
                                 <i class="fas fa-file-alt me-2"></i>Generate Report
                             </button>
                         </div>

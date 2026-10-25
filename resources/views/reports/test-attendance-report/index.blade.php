@@ -42,7 +42,7 @@
             <div class="card-body p-0">
                 <div class="table-responsive">
                     <table class="table table-hover table-bordered mb-0 align-middle">
-                        <thead class="table-light text-center">
+                        <thead class="table-dark text-center">
                             <tr>
                                 <th width="12%">Admission Year</th>
                                 <th width="15%">Date</th>

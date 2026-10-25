@@ -10,9 +10,14 @@ use App\Models\Semester;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Services\ResultService;
 
 class HeResultController extends Controller
 {
+    public function __construct(
+        protected ResultService $resultService
+    ) {}
+
     /**
      * Display a listing of HE results
      */
@@ -123,14 +128,9 @@ class HeResultController extends Controller
 
         // Security check for teachers
         if ($isTeacher) {
-            $isAssigned = \App\Models\HeTeacherAssignment::where('staff_id', $staff->id)
-                ->where('bs_subject_id', $subjectId)
-                ->whereHas('heAdmission', function ($q) use ($programId, $semesterNo, $academicYear) {
-                    $q->where('program_id', $programId)
-                      ->where('current_semester', '>=', $semesterNo)
-                      ->where('admission_year', $academicYear);
-                })
-                ->exists();
+            $isAssigned = $this->resultService->isTeacherAssignedToHeSubject(
+                $staff->id, $subjectId, $programId, $semesterNo, $academicYear
+            );
 
             if (!$isAssigned) {
                 return response()->json(['message' => 'You are not assigned to this class/subject.'], 403);
@@ -150,9 +150,7 @@ class HeResultController extends Controller
 
         // If teacher, they only see their assigned students for this subject
         if ($isTeacher) {
-            $studentsQuery->whereHas('teacherAssignments', function ($q) use ($staff, $subjectId) {
-                $q->where('staff_id', $staff->id)->where('bs_subject_id', $subjectId);
-            });
+            $this->resultService->scopeHeStudentsToTeacher($studentsQuery, $staff, $subjectId);
         }
 
         $students = $studentsQuery->orderBy('roll_no')->get();
@@ -209,61 +207,16 @@ class HeResultController extends Controller
 
         DB::beginTransaction();
         try {
-            $savedCount = 0;
-            $lockedSkipped = 0;
-
-            foreach ($request->marks as $markData) {
-                // Check if result already exists
-                $existing = HeResult::where('he_admission_id', $markData['he_admission_id'])
-                    ->where('bs_subject_id', $markData['bs_subject_id'])
-                    ->where('semester_no', $request->semester_no)
-                    ->where('exam_type', $request->exam_type)
-                    ->first();
-
-                if ($existing) {
-                    // Check if locked and user cannot edit
-                    if ($existing->is_locked && !$canEditLocked) {
-                        $lockedSkipped++;
-                        continue;
-                    }
-
-                    // Update existing
-                    $isAbsent = $markData['is_absent'] ?? false;
-                    $theory = $isAbsent ? 0 : ($markData['theory_marks'] ?? null);
-                    $practical = $isAbsent ? 0 : ($markData['practical_marks'] ?? null);
-                    $total = $isAbsent ? 0 : (($theory ?? 0) + ($practical ?? 0));
-
-                    $existing->update([
-                        'theory_marks' => $theory,
-                        'practical_marks' => $practical,
-                        'total_marks' => $total,
-                        'is_absent' => $isAbsent,
-                        'updated_by' => $userId,
-                    ]);
-                } else {
-                    // Create new result
-                    $isAbsent = $markData['is_absent'] ?? false;
-                    $theory = $isAbsent ? 0 : ($markData['theory_marks'] ?? null);
-                    $practical = $isAbsent ? 0 : ($markData['practical_marks'] ?? null);
-                    $total = $isAbsent ? 0 : (($theory ?? 0) + ($practical ?? 0));
-
-                    HeResult::create([
-                        'he_admission_id' => $markData['he_admission_id'],
-                        'bs_subject_id' => $markData['bs_subject_id'],
-                        'semester_no' => $request->semester_no,
-                        'exam_type' => $request->exam_type,
-                        'theory_marks' => $theory,
-                        'practical_marks' => $practical,
-                        'total_marks' => $total,
-                        'is_absent' => $isAbsent,
-                        'academic_year' => $request->academic_year,
-                        'is_locked' => false,
-                        'created_by' => $userId,
-                        'updated_by' => $userId,
-                    ]);
-                }
-                $savedCount++;
-            }
+            $counts = $this->resultService->upsertHeResults(
+                $request->marks,
+                (int) $request->semester_no,
+                $request->exam_type,
+                (int) $request->academic_year,
+                $userId,
+                $canEditLocked
+            );
+            $savedCount = $counts['saved'];
+            $lockedSkipped = $counts['locked_skipped'];
 
             DB::commit();
 
@@ -293,14 +246,7 @@ class HeResultController extends Controller
         $user = Auth::user();
         $userId = $user->id;
 
-        $lockedCount = 0;
-        foreach ($request->result_ids as $resultId) {
-            $result = HeResult::find($resultId);
-            if ($result && !$result->is_locked) {
-                $result->lock($userId);
-                $lockedCount++;
-            }
-        }
+        $lockedCount = $this->resultService->lockHeResults($request->result_ids, $userId);
 
         return response()->json([
             'success' => true,

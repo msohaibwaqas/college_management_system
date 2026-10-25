@@ -59,6 +59,16 @@ class InstituteSetting extends Model
         'inquiry_password',
     ];
 
+    protected static function booted()
+    {
+        static::saved(function () {
+            \Illuminate\Support\Facades\Cache::forget('institute_settings');
+        });
+        static::deleted(function () {
+            \Illuminate\Support\Facades\Cache::forget('institute_settings');
+        });
+    }
+
     /**
      * Get the first (and only) settings record
      */
@@ -150,12 +160,12 @@ class InstituteSetting extends Model
      */
     public static function getColors()
     {
-        $settings = self::first();
+        $settings = self::getSettings();
         return [
-            'primary' => $settings->color_primary ?? '#006159',
-            'secondary' => $settings->color_secondary ?? '#2e9f82',
-            'highlight' => $settings->color_highlight ?? '#d6ec8c',
-            'success' => $settings->color_success ?? '#68c170',
+            'primary' => (!empty($settings->color_primary)) ? $settings->color_primary : '#006159',
+            'secondary' => (!empty($settings->color_secondary)) ? $settings->color_secondary : '#2e9f82',
+            'highlight' => (!empty($settings->color_highlight)) ? $settings->color_highlight : '#d6ec8c',
+            'success' => (!empty($settings->color_success)) ? $settings->color_success : '#68c170',
         ];
     }
 }

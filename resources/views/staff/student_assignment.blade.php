@@ -28,8 +28,8 @@
 }
 #sectionsPanel {
     border-radius: 10px;
-    background: #f8f9ff;
-    border: 1px solid #dbe3f8;
+    background: var(--col-light-bg);
+    border: 1px solid var(--col-border);
     padding: 14px 16px;
     margin-bottom: 16px;
 }
@@ -41,12 +41,12 @@
     margin-bottom: 10px;
 }
 .chip-colors {
-    --c0-bg: #e8f0fe; --c0-text: #1a56db; --c0-border: #c6d9f7;
-    --c1-bg: #fce8e6; --c1-text: #c0392b; --c1-border: #f5c6c3;
-    --c2-bg: #e6f4ea; --c2-text: #1e7e34; --c2-border: #c3e6cb;
-    --c3-bg: #fef3cd; --c3-text: #856404; --c3-border: #ffeeba;
-    --c4-bg: #f3e8ff; --c4-text: #6d28d9; --c4-border: #ddd6fe;
-    --c5-bg: #e0f7fa; --c5-text: #00796b; --c5-border: #b2dfdb;
+    --c0-bg: var(--col-primary-subtle); --c0-text: var(--col-primary); --c0-border: color-mix(in srgb, var(--col-primary) 30%, transparent);
+    --c1-bg: var(--col-secondary-subtle); --c1-text: var(--col-secondary); --c1-border: color-mix(in srgb, var(--col-secondary) 30%, transparent);
+    --c2-bg: #f1f5f9; --c2-text: #334155; --c2-border: #cbd5e1;
+    --c3-bg: var(--col-primary-subtle); --c3-text: var(--col-dark); --c3-border: color-mix(in srgb, var(--col-dark) 30%, transparent);
+    --c4-bg: var(--col-secondary-subtle); --c4-text: var(--col-active); --c4-border: color-mix(in srgb, var(--col-active) 30%, transparent);
+    --c5-bg: #f8fafc; --c5-text: #0f172a; --c5-border: #94a3b8;
 }
 </style>
 @endsection
@@ -95,7 +95,7 @@
                         <button type="button" id="loadStudentsBtn" class="btn btn-primary flex-grow-1">
                             <i class="fas fa-sync me-1"></i>Load
                         </button>
-                        <button type="button" id="downloadAwardListBtn" class="btn btn-danger flex-grow-1" title="Download Empty Award List">
+                        <button type="button" id="downloadAwardListBtn" class="btn btn-outline-danger flex-grow-1" title="Download Empty Award List">
                             <i class="fas fa-file-pdf me-1"></i>Award List
                         </button>
                     </div>
@@ -123,9 +123,9 @@
         <!-- Unassigned Students -->
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="fas fa-user-slash me-2"></i>Unassigned Students</h5>
-                    <button type="button" id="assignBtn" class="btn btn-sm btn-dark" disabled>
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-user-slash text-secondary me-2"></i>Unassigned Students</h5>
+                    <button type="button" id="assignBtn" class="btn btn-sm btn-primary" disabled>
                         Assign Selected <i class="fas fa-arrow-right ms-1"></i>
                     </button>
                 </div>
@@ -140,11 +140,11 @@
         <!-- Assigned Students -->
         <div class="col-md-6">
             <div class="card h-100">
-                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
-                    <button type="button" id="unassignBtn" class="btn btn-sm btn-light" disabled>
+                <div class="card-header bg-white border-bottom py-3 d-flex justify-content-between align-items-center">
+                    <button type="button" id="unassignBtn" class="btn btn-sm btn-outline-danger" disabled>
                         <i class="fas fa-arrow-left me-1"></i> Unassign Selected
                     </button>
-                    <h5 class="mb-0">Assigned Students <i class="fas fa-user-check ms-2"></i></h5>
+                    <h5 class="mb-0 fw-bold text-dark">Assigned Students <i class="fas fa-user-check text-primary ms-2"></i></h5>
                 </div>
                 <div class="card-body p-0" style="max-height: 600px; overflow-y: auto;">
                     <div id="assignedStudentsContainer" class="p-3 text-center text-muted">
@@ -162,12 +162,12 @@ $(document).ready(function() {
 
     // Section chip color palette (cycling)
     const CHIP_COLORS = [
-        { bg: '#e8f0fe', text: '#1a56db', border: '#c6d9f7' },
-        { bg: '#fce8e6', text: '#c0392b', border: '#f5c6c3' },
-        { bg: '#e6f4ea', text: '#1e7e34', border: '#c3e6cb' },
-        { bg: '#fef3cd', text: '#856404', border: '#ffeeba' },
-        { bg: '#f3e8ff', text: '#6d28d9', border: '#ddd6fe' },
-        { bg: '#e0f7fa', text: '#00796b', border: '#b2dfdb' },
+        { bg: 'var(--col-primary-subtle)', text: 'var(--col-primary)', border: 'color-mix(in srgb, var(--col-primary) 30%, transparent)' },
+        { bg: 'var(--col-secondary-subtle)', text: 'var(--col-secondary)', border: 'color-mix(in srgb, var(--col-secondary) 30%, transparent)' },
+        { bg: '#f1f5f9', text: '#334155', border: '#cbd5e1' },
+        { bg: 'var(--col-primary-subtle)', text: 'var(--col-dark)', border: 'color-mix(in srgb, var(--col-dark) 30%, transparent)' },
+        { bg: 'var(--col-secondary-subtle)', text: 'var(--col-active)', border: 'color-mix(in srgb, var(--col-active) 30%, transparent)' },
+        { bg: '#f8fafc', text: '#0f172a', border: '#94a3b8' },
     ];
 
     // Store sections data

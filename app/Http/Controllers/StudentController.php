@@ -3,29 +3,20 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
-use App\Models\StudentAttribute;
-use App\Models\Father;
-use App\Models\Contact;
 use App\Models\Admissions;
-use App\Models\SscRecord;
-use App\Models\Subject;
-use App\Models\SubjectGroup;
-use App\Models\AdmissionApplication;
-use App\Models\StudentCompulsorySubject;
-use App\Models\StudentElectiveSubject;
-use App\Models\BloodGroup;
-use App\Models\Quota;
-use App\Models\BiseRecord;
+use App\Models\FeeVoucher;
+use App\Models\InstituteSetting;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 use App\Services\FileUploadService;
 use App\Http\Requests\Student\StoreStudentRequest;
 use App\Http\Requests\Student\UpdateStudentRequest;
 use App\Actions\Student\CreateStudentAction;
 use App\Actions\Student\UpdateStudentAction;
 use App\Services\Student\StudentBulkOperationService;
+use App\Services\Student\StudentSubjectService;
+use App\Services\Student\StudentFormService;
 use App\Services\Export\StudentExportService;
 
 class StudentController extends Controller
@@ -33,7 +24,9 @@ class StudentController extends Controller
     public function __construct(
         protected FileUploadService $fileUploadService,
         protected StudentBulkOperationService $bulkOperationService,
-        protected StudentExportService $exportService
+        protected StudentExportService $exportService,
+        protected StudentSubjectService $subjectService,
+        protected StudentFormService $formService
     ) {}
 
     /**
@@ -53,37 +46,30 @@ class StudentController extends Controller
             }
         ]);
 
-        // Determine if we should restrict to teacher's students
         $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
-        // If user is a teacher, show only assigned students
         if ($isTeacher) {
             $staff = Auth::user()->staff;
             $query->assignedToTeacher($staff?->id);
         }
 
-        // Filter by admission year
         if ($request->filled('admission_year')) {
             $query->inBatch((int) $request->admission_year);
         }
 
-        // Hide graduated students by default
         if (!$request->filled('show_graduated') || $request->show_graduated != '1') {
             $query->whereNotGraduated();
         }
 
-        // Search by name or roll number
         if ($request->filled('search')) {
             $query->search($request->search);
         }
 
-        // Sorting
         $sortBy = $request->get('sort_by', 'college_roll_no');
         $sortOrder = $request->get('sort_order', 'asc');
 
         try {
             if (in_array($sortBy, ['bise_roll_11', 'bise_roll_12', 'college_roll_no', 'admission_year'])) {
-                // Use orderBy with a subquery to avoid join conflicts
                 $query->orderByRaw("(SELECT CAST({$sortBy} AS UNSIGNED) FROM admissions WHERE admissions.student_id = students.id LIMIT 1) {$sortOrder}");
             } elseif ($sortBy === 'status') {
                 $query->join('admissions', 'students.id', '=', 'admissions.student_id')
@@ -93,16 +79,12 @@ class StudentController extends Controller
                 $query->orderBy($sortBy, $sortOrder);
             }
         } catch (\Exception $e) {
-            \Log::error('Sorting error: ' . $e->getMessage());
-            // Fallback to default sorting
+            Log::error('Sorting error: ' . $e->getMessage());
             $query->orderBy('id', 'asc');
         }
 
-        // Pagination
         $perPage = $request->get('per_page', 20);
         $students = $query->paginate($perPage)->appends($request->except('page'));
-
-        // Get unique admission years for filter
         $admissionYears = Admissions::distinctAdmissionYears();
 
         return view('students.index', compact('students', 'admissionYears'));
@@ -113,14 +95,8 @@ class StudentController extends Controller
      */
     public function create()
     {
-        // Optimization: Cache static reference data for 1 hour
-        $bloodGroups = \Illuminate\Support\Facades\Cache::remember('blood_groups', 3600, fn() => BloodGroup::all());
-        $quotas = \Illuminate\Support\Facades\Cache::remember('quotas', 3600, fn() => Quota::all());
-        $bises = \Illuminate\Support\Facades\Cache::remember('bise_records', 3600, fn() => BiseRecord::all());
-        $subjects = \Illuminate\Support\Facades\Cache::remember('subjects_elective', 3600, fn() => Subject::where('type', 'Elective')->orderBy('name')->get());
-        $subjectGroups = \Illuminate\Support\Facades\Cache::remember('subject_groups_all', 3600, fn() => SubjectGroup::with('subjects')->get());
-        
-        return view('students.create', compact('bloodGroups', 'quotas', 'bises', 'subjects', 'subjectGroups'));
+        $refData = $this->formService->getCachedReferenceData();
+        return view('students.create', $refData);
     }
 
     /**
@@ -137,12 +113,11 @@ class StudentController extends Controller
 
             return redirect()->route('students.index')->with('success', 'Student added successfully!');
         } catch (\Illuminate\Database\QueryException $e) {
-            return $this->handleDatabaseException($e);
+            Log::error('Student DB Exception in store: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', $this->formService->formatDatabaseErrorMessage($e));
         } catch (\Exception $e) {
-            \Log::error('General Exception in store: ' . $e->getMessage());
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'An unexpected error occurred: ' . $e->getMessage());
+            Log::error('General Exception in store: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'An unexpected error occurred: ' . $e->getMessage());
         }
     }
 
@@ -151,94 +126,15 @@ class StudentController extends Controller
      */
     public function edit(Request $request, Student $student)
     {
-        $redirectTo = $request->get('redirect_to', url()->previous());
         if (Auth::user()?->isTeacher()) {
             return redirect()->route('students.index')->with('error', 'Access denied.');
         }
 
-        // Optimization: Cache static reference data for 1 hour
-        $bloodGroups = \Illuminate\Support\Facades\Cache::remember('blood_groups', 3600, fn() => BloodGroup::all());
-        $quotas = \Illuminate\Support\Facades\Cache::remember('quotas', 3600, fn() => Quota::all());
-        $bises = \Illuminate\Support\Facades\Cache::remember('bise_records', 3600, fn() => BiseRecord::all());
-        $subjects = \Illuminate\Support\Facades\Cache::remember('subjects_elective', 3600, fn() => Subject::where('type', 'Elective')->orderBy('name')->get());
-        $subjectGroups = \Illuminate\Support\Facades\Cache::remember('subject_groups_all', 3600, fn() => SubjectGroup::with('subjects')->get());
+        $redirectTo = $request->get('redirect_to', url()->previous());
+        $data = $this->formService->prepareEditData($student, $redirectTo);
 
-        // Force fresh load of relationships
-        $student->load([
-            'contact',
-            'father',
-            'admissions',
-            'attribute',
-            'sscRecord',
-            'compulsorySubjects',
-        ]);
-        
-        // Force fresh electives (bypass cache)
-        $student->setRelation('electives', StudentElectiveSubject::where('student_id', $student->id)
-            ->orderBy('sequence')
-            ->with('subject')
-            ->get());
-
-        // Get the current subject group ID from one of the electives
-        $currentSubjectGroupId = $student->electives->first() ? $student->electives->first()->subject_group_id : null;
-
-        $admission = $student->admissions->first();
-        $collegeRollNo = $admission ? $admission->college_roll_no : '';
-        $hsscRegNo = $admission ? $admission->hssc_reg_no : '';
-
-        // Auto-split first_name if last_name is empty
-        if (empty(trim($student->last_name ?? ''))) {
-            $fullName = trim(preg_replace('/\s+/', ' ', $student->first_name ?? ''));
-            $parts = explode(' ', $fullName);
-            if (count($parts) > 1) {
-                $student->last_name = array_pop($parts);
-                $student->first_name = implode(' ', $parts);
-            } else {
-                $student->last_name = $fullName;
-            }
-        }
-
-        // Auto-default domicile
-        if ($student->attribute && empty(trim($student->attribute->domicile ?? ''))) {
-            $student->attribute->domicile = 'Bahawalnagar';
-        }
-
-        // Auto-default student_contact
-        if ($student->contact && empty(trim($student->contact->student_contact ?? ''))) {
-            $student->contact->student_contact = $hsscRegNo;
-        }
-
-        // Ensure SSC always exists with sensible defaults
-        $biseBahawalpur = BiseRecord::where('name', 'like', '%Bahawalpur%')->first();
-        $biseId = $biseBahawalpur ? $biseBahawalpur->id : 1;
-
-        if (!$student->sscRecord) {
-            $student->sscRecord = new SscRecord([
-                'bise_id' => $biseId,
-                'roll_no' => $collegeRollNo,
-                'reg_no' => $hsscRegNo,
-                'school_name' => 'Govt. High School Chishtian',
-                'total_mark' => 1200,
-                'obtained_mark' => 600,
-                'passing_year' => (int)date('Y'),
-                'passing_session' => '1st Annual',
-                'ssc_group' => 'Science',
-            ]);
-        } else {
-            if (empty($student->sscRecord->bise_id)) $student->sscRecord->bise_id = $biseId;
-            if (empty(trim($student->sscRecord->roll_no ?? ''))) $student->sscRecord->roll_no = $collegeRollNo;
-            if (empty(trim($student->sscRecord->reg_no ?? ''))) $student->sscRecord->reg_no = $hsscRegNo;
-            if (empty(trim($student->sscRecord->school_name ?? ''))) $student->sscRecord->school_name = 'Govt. High School Chishtian';
-            if (empty($student->sscRecord->total_mark)) $student->sscRecord->total_mark = 1200;
-            if (empty($student->sscRecord->obtained_mark)) $student->sscRecord->obtained_mark = 600;
-            if (empty($student->sscRecord->passing_year)) $student->sscRecord->passing_year = (int)date('Y');
-            if (empty($student->sscRecord->passing_session)) $student->sscRecord->passing_session = '1st Annual';
-            if (empty($student->sscRecord->ssc_group)) $student->sscRecord->ssc_group = 'Science';
-        }
-
-        return view('students.edit', compact('student', 'bloodGroups', 'quotas', 'bises', 'subjects', 'subjectGroups', 'currentSubjectGroupId', 'redirectTo'));
+        return view('students.edit', $data);
     }
-
 
     /**
      * Update student
@@ -264,45 +160,12 @@ class StudentController extends Controller
 
             return redirect()->route('students.index')->with('success', 'Student updated successfully!');
         } catch (\Illuminate\Database\QueryException $e) {
-            return $this->handleDatabaseException($e);
+            Log::error('Student DB Exception in update: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', $this->formService->formatDatabaseErrorMessage($e));
         } catch (\Exception $e) {
-            \Log::error('Student update failed: ' . $e->getMessage());
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'An error occurred while updating the student. Please try again or contact support if the problem persists.');
+            Log::error('Student update failed: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'An error occurred while updating the student. Please try again.');
         }
-    }
-
-    /**
-     * Handle common duplicate constraint violations in student creation/updates.
-     */
-    protected function handleDatabaseException(\Illuminate\Database\QueryException $e)
-    {
-        \Log::error('Student DB Exception: ' . $e->getMessage());
-
-        if ($e->getCode() == 23000) {
-            if (str_contains($e->getMessage(), 'uq_ssc_roll_reg')) {
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'The SSC Roll Number and Registration Number combination already exists in the system. Please check and try again.');
-            } elseif (str_contains($e->getMessage(), 'college_roll_no')) {
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'The College Roll Number already exists for this admission year/program. Please use a different roll number.');
-            } elseif (str_contains($e->getMessage(), 'hssc_reg_no')) {
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'The HSSC Registration Number already exists. Please use a different registration number.');
-            } else {
-                return redirect()->back()
-                    ->withInput()
-                    ->with('error', 'A duplicate entry was detected: ' . $e->getMessage());
-            }
-        }
-
-        return redirect()->back()
-            ->withInput()
-            ->with('error', 'A database error occurred: ' . $e->getMessage());
     }
 
     /**
@@ -471,7 +334,6 @@ class StudentController extends Controller
             'electives.subject'
         ]);
 
-        // Apply same filters as index
         if ($request->filled('admission_year')) {
             $query->whereHas('admissions', function($q) use ($request) {
                 $q->where('admission_year', $request->admission_year);
@@ -521,44 +383,12 @@ class StudentController extends Controller
      */
     public function studentsBySubject(Request $request)
     {
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+        $data = $this->subjectService->getStudentsBySubjectData(
+            $request->input('admission_year'),
+            $request->input('subject_id')
+        );
 
-        $selectedYear = $request->input('admission_year');
-        $selectedSubject = $request->input('subject_id');
-
-        // Get subjects for selected year
-        $subjects = collect();
-        if ($selectedYear) {
-            $subjects = Subject::where('type', 'Elective')
-                ->whereHas('studentElectives.student.admissions', function($q) use ($selectedYear) {
-                    $q->where('admission_year', $selectedYear);
-                })
-                ->orderBy('name', 'ASC')
-                ->get();
-        }
-
-        // Get students for selected year and subject
-        $students = collect();
-        $subjectName = '';
-        
-        if ($selectedYear && $selectedSubject) {
-            $students = Student::with(['admissions', 'father', 'attribute'])
-                ->whereHas('admissions', function($q) use ($selectedYear) {
-                    $q->where('admission_year', $selectedYear);
-                })
-                ->whereHas('electives', function($q) use ($selectedSubject) {
-                    $q->where('subject_id', $selectedSubject);
-                })
-                ->get();
-
-            $subject = Subject::find($selectedSubject);
-            $subjectName = $subject ? $subject->name : '';
-        }
-
-        return view('students.by_subject', compact('admissionYears', 'subjects', 'selectedYear', 'selectedSubject', 'students', 'subjectName'));
+        return view('students.by_subject', $data);
     }
 
     /**
@@ -566,36 +396,8 @@ class StudentController extends Controller
      */
     public function groupStudents(Request $request)
     {
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
-
-        $selectedYear = $request->input('admission_year');
-        $groups = [];
-
-        if ($selectedYear) {
-            $students = Student::with(['electives.subject', 'admissions', 'father'])
-                ->inBatch((int) $selectedYear)
-                ->get();
-
-            foreach ($students as $student) {
-                $subjectNames = $student->electives->pluck('subject.name')->toArray();
-                if (count($subjectNames) > 0) {
-                    $group = $student->subject_group;
-                    $admission = $student->admissions->first();
-
-                    $groups[$group][] = [
-                        'roll_no' => $admission ? $admission->college_roll_no : 'N/A',
-                        'name' => $student->full_name,
-                        'father_name' => $student->father ? $student->father->name : 'N/A',
-                        'subjects' => implode(', ', $subjectNames)
-                    ];
-                }
-            }
-        }
-
-        return view('students.groups', compact('admissionYears', 'selectedYear', 'groups'));
+        $data = $this->subjectService->getGroupedStudentsData($request->input('admission_year'));
+        return view('students.groups', $data);
     }
 
     /**
@@ -603,35 +405,7 @@ class StudentController extends Controller
      */
     public function exportGroupsCSV($year)
     {
-        $students = Student::with(['electives.subject', 'admissions', 'father'])
-            ->inBatch((int) $year)
-            ->get();
-
-        $filename = "grouped_students_{$year}.csv";
-        $headers = ['Content-Type' => 'text/csv', 'Content-Disposition' => "attachment; filename=$filename"];
-
-        $callback = function() use ($students) {
-            $output = fopen('php://output', 'w');
-            fputcsv($output, ['Group', 'Roll No', 'Name', 'Father Name', 'Subjects']);
-            
-            foreach ($students as $student) {
-                $subjectNames = $student->electives->pluck('subject.name')->toArray();
-                $group = count($subjectNames) > 0 ? $student->subject_group : 'Unknown';
-                $admission = $student->admissions->first();
-                
-                fputcsv($output, [
-                    $group,
-                    $admission ? $admission->college_roll_no : 'N/A',
-                    $student->full_name,
-                    $student->father ? $student->father->name : 'N/A',
-                    implode(', ', $subjectNames)
-                ]);
-            }
-            
-            fclose($output);
-        };
-
-        return response()->stream($callback, 200, $headers);
+        return $this->subjectService->exportGroupsCSV($year);
     }
 
     /**
@@ -647,28 +421,8 @@ class StudentController extends Controller
             return redirect()->route('students.show', $student)->with('error', 'You cannot change subjects because there is already a pending Subject Change fee voucher that must be paid first.');
         }
 
-        $student->load(['electives.subject', 'admissions']);
-        $subjects = Subject::where('type', 'Elective')->orderBy('name')->get();
-        $subjectGroups = SubjectGroup::with('subjects')->get();
-        
-        // Find current group ID if all subjects belong to it
-        $currentGroupIds = $student->electives->pluck('subject_group_id')->filter()->unique();
-        $groupId = $currentGroupIds->count() === 1 ? $currentGroupIds->first() : null;
-
-        // Fallback: If no subject_group_id on electives, try to find a group that matches these subjects
-        if (!$groupId && $student->electives->count() === 3) {
-            $studentSubjectIds = $student->electives->pluck('subject_id')->sort()->values()->toArray();
-            foreach ($subjectGroups as $group) {
-                $groupSubjectIds = $group->subjects->pluck('id')->sort()->values()->toArray();
-                // Check if all student subjects are in this group
-                if (count(array_intersect($studentSubjectIds, $groupSubjectIds)) === 3) {
-                    $groupId = $group->id;
-                    break;
-                }
-            }
-        }
-        
-        return view('students.change_subjects', compact('student', 'subjects', 'subjectGroups', 'groupId'));
+        $data = $this->subjectService->getChangeSubjectsData($student);
+        return view('students.change_subjects', $data);
     }
 
     /**
@@ -690,29 +444,21 @@ class StudentController extends Controller
         ]);
 
         try {
-            $feeService = new \App\Services\FeeCalculationService();
-            $result = $feeService->calculateDifference($student, $request->elective_subjects);
+            $result = $this->subjectService->updateStudentSubjects(
+                $student,
+                $request->elective_subjects,
+                Auth::id()
+            );
 
-            $difference = $result['difference'];
+            $redirect = redirect()->route('students.show', $student)->with('success', $result['message']);
 
-            if ($difference > 0) {
-                // Generate a difference voucher
-                $voucher = $feeService->createVoucher($student, $result['extra_items']);
-                
-                $student->updateElectives($request->elective_subjects, Auth::id());
-
-                return redirect()->route('students.show', $student)
-                    ->with('success', "Subjects updated successfully. A new voucher ({$voucher->voucher_number}) for the fee difference of {$difference} has been generated.")
-                    ->with('voucher_id', $voucher->id);
-            } else {
-                // No difference or negative (we don't refund automatically here)
-                $student->updateElectives($request->elective_subjects, Auth::id());
-
-                return redirect()->route('students.show', $student)
-                    ->with('success', 'Subjects updated successfully. No additional fees required.');
+            if (!empty($result['has_voucher']) && isset($result['voucher'])) {
+                $redirect->with('voucher_id', $result['voucher']->id);
             }
+
+            return $redirect;
         } catch (\Exception $e) {
-            \Log::error('Subject change failed: ' . $e->getMessage());
+            Log::error('Subject change failed: ' . $e->getMessage());
             return back()->with('error', 'Subject change failed: ' . $e->getMessage());
         }
     }
@@ -720,10 +466,10 @@ class StudentController extends Controller
     /**
      * Download or print a fee voucher
      */
-    public function downloadVoucher(\App\Models\FeeVoucher $voucher)
+    public function downloadVoucher(FeeVoucher $voucher)
     {
         $voucher->load(['items', 'student.admissions', 'student.heAdmissions', 'application']);
-        $settings = \App\Models\InstituteSetting::getSettings();
+        $settings = InstituteSetting::getSettings();
         
         return view('pdfs.fee-voucher', compact('voucher', 'settings'));
     }
@@ -731,7 +477,7 @@ class StudentController extends Controller
     /**
      * Confirm payment for a student fee voucher
      */
-    public function confirmVoucherPayment(Request $request, \App\Models\FeeVoucher $voucher)
+    public function confirmVoucherPayment(Request $request, FeeVoucher $voucher)
     {
         $request->validate([
             'paid_amount' => 'required|numeric|min:0',
@@ -747,7 +493,7 @@ class StudentController extends Controller
 
             return back()->with('success', 'Payment for voucher ' . $voucher->voucher_number . ' confirmed successfully.');
         } catch (\Exception $e) {
-            \Log::error('Voucher payment confirmation failed: ' . $e->getMessage());
+            Log::error('Voucher payment confirmation failed: ' . $e->getMessage());
             return back()->with('error', 'Failed to confirm payment: ' . $e->getMessage());
         }
     }

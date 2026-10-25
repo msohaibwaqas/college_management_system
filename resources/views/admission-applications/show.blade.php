@@ -197,8 +197,7 @@
 
             {{-- Action: Review (if submitted/under_review) --}}
             @if(in_array($application->status, ['submitted', 'under_review']))
-            <div class="card mb-3 border-primary">
-                <div class="card-header bg-primary text-white"><i class="fas fa-gavel me-2"></i>Review Application</div>
+            <div class="card mb-3 shadow-sm border-0"><div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-gavel fa-fw"></i></span><h6 class="mb-0 fw-bold text-dark">Review Application</h6></div>
                 <div class="card-body">
                     <form method="POST" action="{{ route('admission-applications.review', $application) }}">
                         @csrf
@@ -221,8 +220,7 @@
 
             {{-- Action: Generate Voucher (if approved) --}}
             @if($application->status === 'approved' && !$application->voucher)
-            <div class="card mb-3 border-warning">
-                <div class="card-header bg-warning text-dark"><i class="fas fa-receipt me-2"></i>Generate Fee Voucher</div>
+            <div class="card mb-3 shadow-sm border-0"><div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-secondary-subtle text-secondary me-2 p-2 rounded-circle"><i class="fas fa-receipt fa-fw"></i></span><h6 class="mb-0 fw-bold text-dark">Generate Fee Voucher</h6></div>
                 <div class="card-body">
                     <div class="d-grid mb-2">
                         <a href="{{ route('admission-applications.voucher-preview', $application) }}" class="btn btn-warning">
@@ -236,8 +234,7 @@
 
             {{-- Action: Confirm Payment (if fee_pending) --}}
             @if($application->status === 'fee_pending')
-            <div class="card mb-3 border-success">
-                <div class="card-header bg-success text-white"><i class="fas fa-money-bill-wave me-2"></i>Confirm Payment</div>
+            <div class="card mb-3 shadow-sm border-0"><div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-success-subtle text-success me-2 p-2 rounded-circle"><i class="fas fa-money-bill-wave fa-fw"></i></span><h6 class="mb-0 fw-bold text-dark">Confirm Payment</h6></div>
                 <div class="card-body">
                     <form method="POST" action="{{ route('admission-applications.confirm-payment', $application) }}">
                         @csrf
@@ -259,8 +256,7 @@
 
             {{-- Action: Admit Late (if fee_paid and not yet in merit list) --}}
             @if($application->status === 'fee_paid')
-            <div class="card mb-3 border-info">
-                <div class="card-header bg-info text-white"><i class="fas fa-user-plus me-2"></i>Late Admission</div>
+            <div class="card mb-3 shadow-sm border-0"><div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-user-plus fa-fw"></i></span><h6 class="mb-0 fw-bold text-dark">Late Admission</h6></div>
                 <div class="card-body">
                     <p class="small text-muted">Admit this student as a late applicant. They will be assigned the next available roll number in their subject group.</p>
                     <form method="POST" action="{{ route('admission-applications.admit-late', $application) }}" onsubmit="return confirm('Are you sure you want to admit this student as a late applicant?');">

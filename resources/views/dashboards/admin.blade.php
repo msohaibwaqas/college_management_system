@@ -98,9 +98,7 @@
     <div class="row g-4 mb-5">
         <div class="col-lg-4">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-primary text-white py-3">
-                    <h5 class="mb-0 small text-uppercase fw-bold"><i class="fas fa-graduation-cap me-2"></i>HSSC Statistics</h5>
-                </div>
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-graduation-cap fa-fw"></i></span><h5 class="mb-0 small text-uppercase fw-bold text-dark">HSSC Statistics</h5></div>
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="text-muted"><i class="fas fa-mars me-2"></i>Male Students</span>
@@ -120,9 +118,7 @@
         </div>
         <div class="col-lg-4">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-success text-white py-3">
-                    <h5 class="mb-0 small text-uppercase fw-bold"><i class="fas fa-university me-2"></i>ADP Statistics</h5>
-                </div>
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-secondary-subtle text-secondary me-2 p-2 rounded-circle"><i class="fas fa-university fa-fw"></i></span><h5 class="mb-0 small text-uppercase fw-bold text-dark">ADP Statistics</h5></div>
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="text-muted"><i class="fas fa-mars me-2"></i>Male Students</span>
@@ -142,9 +138,7 @@
         </div>
         <div class="col-lg-4">
             <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-info text-white py-3">
-                    <h5 class="mb-0 small text-uppercase fw-bold"><i class="fas fa-book-reader me-2"></i>BS Statistics</h5>
-                </div>
+                <div class="card-header bg-white border-bottom py-3 d-flex align-items-center"><span class="badge bg-primary-subtle text-primary me-2 p-2 rounded-circle"><i class="fas fa-book-reader fa-fw"></i></span><h5 class="mb-0 small text-uppercase fw-bold text-dark">BS Statistics</h5></div>
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <span class="text-muted"><i class="fas fa-mars me-2"></i>Male Students</span>

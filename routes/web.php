@@ -444,8 +444,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{leaveType}', [\App\Http\Controllers\LeaveTypeController::class, 'destroy'])->name('leave-types.destroy');
     });
 
-    // In-App Notifications
-    Route::prefix('notifications')->middleware('role:principal,super_admin')->group(function () {
+    // In-App Notifications (Accessible to all authenticated users)
+    Route::prefix('notifications')->group(function () {
         Route::get('/', [NotificationController::class, 'index'])->name('notifications.index');
         Route::post('/{id}/mark-as-read', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
         Route::post('/mark-all-as-read', [NotificationController::class, 'markAllAsRead'])->name('notifications.markAllAsRead');
