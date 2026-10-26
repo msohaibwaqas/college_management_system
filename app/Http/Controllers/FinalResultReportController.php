@@ -27,11 +27,29 @@ class FinalResultReportController extends Controller
         $selectedYear = $request->admission_year;
         $customPassPercentage = $request->pass_percentage;
         $selectedPart = $request->input('result_part', 'combine');
+        
+        // Option D: Toggle Board Grace Marks
+        // If include_grace is present in request, evaluate boolean; otherwise default to true
+        $includeGrace = $request->has('include_grace') 
+            ? $request->boolean('include_grace') 
+            : true;
 
         if ($selectedYear) {
-            $reportData = $this->reportService->generateReportData($selectedYear, $customPassPercentage, $selectedPart);
+            $reportData = $this->reportService->generateReportData(
+                $selectedYear, 
+                $customPassPercentage, 
+                $selectedPart, 
+                $includeGrace
+            );
         }
 
-        return view('reports.final-result-report.index', compact('admissionYears', 'reportData', 'selectedYear', 'customPassPercentage', 'selectedPart'));
+        return view('reports.final-result-report.index', compact(
+            'admissionYears', 
+            'reportData', 
+            'selectedYear', 
+            'customPassPercentage', 
+            'selectedPart',
+            'includeGrace'
+        ));
     }
 }

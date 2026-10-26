@@ -17,9 +17,10 @@ class FinalResultReportService
      * @param string|int $admissionYear
      * @param float|null $passPercentage
      * @param string $selectedPart 'combine', 'part1', 'part2'
+     * @param bool $includeGrace Whether to include BISE Board 1% Grace Marks
      * @return array
      */
-    public function generateReportData($admissionYear, $passPercentage = null, string $selectedPart = 'combine'): array
+    public function generateReportData($admissionYear, $passPercentage = null, string $selectedPart = 'combine', bool $includeGrace = true): array
     {
         $passThreshold = is_numeric($passPercentage) ? (float) $passPercentage : 33.0;
 
@@ -48,8 +49,10 @@ class FinalResultReportService
             ->get()
             ->groupBy('student_id');
 
-        // 3. Pre-calculate Grace Status for EVERY student in one pass
-        $graceStatusMap = $this->calculateGraceStatusMap($studentIds, $allResults, $passThreshold, $selectedPart);
+        // 3. Pre-calculate Grace Status for EVERY student in one pass (if enabled)
+        $graceStatusMap = $includeGrace 
+            ? $this->calculateGraceStatusMap($studentIds, $allResults, $passThreshold, $selectedPart)
+            : [];
 
         // 4. Get Assignments and Subject Totals
         $assignments = DB::table('student_teacher_subjects')
@@ -131,7 +134,7 @@ class FinalResultReportService
 
             if ($assignedCount == 0) continue;
 
-            $pass = 0; $fail = 0; $absent = 0; $missing = 0; $missingDetails = [];
+            $pass = 0; $graceCount = 0; $fail = 0; $absent = 0; $missing = 0; $missingDetails = [];
 
             foreach ($assignedStudentIds as $studentId) {
                 $studentResults = $allResults->get($studentId, collect())->where('subject_id', $subject->id);
@@ -147,7 +150,7 @@ class FinalResultReportService
                     continue;
                 }
 
-                $canUseGrace = $graceStatusMap[$studentId] ?? false;
+                $canUseGrace = $includeGrace ? ($graceStatusMap[$studentId] ?? false) : false;
 
                 if ($selectedPart === 'part1') {
                     $part1 = $studentResults->where('class_level', '11')->first();
@@ -159,8 +162,11 @@ class FinalResultReportService
                         $aggThreshold = round($p1Max * $passThreshold / 100);
                         
                         $isPassed = ($p1Obt >= $aggThreshold);
-                        if ($isPassed || $canUseGrace) {
+                        if ($isPassed) {
                             $pass++;
+                        } elseif ($canUseGrace) {
+                            $pass++;
+                            $graceCount++;
                         } else {
                             $fail++;
                         }
@@ -183,14 +189,17 @@ class FinalResultReportService
                         $p2Theory = $part2->obtained_theory ?? 0;
                         
                         $isPassed = ($p2Theory >= $thThreshold && $p2Obt >= $aggThreshold);
-                        if ($isPassed || $canUseGrace) {
+                        if ($isPassed) {
                             $pass++;
+                        } elseif ($canUseGrace) {
+                            $pass++;
+                            $graceCount++;
                         } else {
                             $fail++;
                         }
                     }
                 } else {
-                    // Combine (both Part I & II) - exact legacy formula
+                    // Combine (both Part I & II)
                     $part1 = $studentResults->where('class_level', '11')->first();
                     $part2 = $studentResults->where('class_level', '12')->first();
                     
@@ -214,8 +223,11 @@ class FinalResultReportService
                         
                         $isPassed = (($p1Obt + $p2Obt) >= $thThreshold && $totalObt >= $aggThreshold);
                         
-                        if ($isPassed || $canUseGrace) {
+                        if ($isPassed) {
                             $pass++;
+                        } elseif ($canUseGrace) {
+                            $pass++;
+                            $graceCount++;
                         } else {
                             $fail++;
                         }
@@ -232,6 +244,7 @@ class FinalResultReportService
                 'total_enrolled' => $enrolledCount,
                 'total_assigned' => $assignedCount,
                 'pass' => $pass,
+                'grace' => $graceCount,
                 'fail' => $fail,
                 'absent' => $absent,
                 'missing' => $missing,

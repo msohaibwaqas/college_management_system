@@ -48,6 +48,20 @@
                         <i class="fas fa-filter me-1"></i> Show Report
                     </button>
                 </div>
+
+                <div class="col-12 mt-2">
+                    <div class="p-2 px-3 bg-light rounded-3 border d-inline-flex align-items-center">
+                        <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                            <input type="hidden" name="include_grace" value="0">
+                            <input class="form-check-input mt-0" type="checkbox" name="include_grace" id="include_grace" value="1" 
+                                   {{ ($includeGrace ?? true) ? 'checked' : '' }} style="cursor: pointer; width: 2.2em; height: 1.2em;">
+                            <label class="form-check-label fw-semibold text-dark user-select-none" for="include_grace" style="cursor: pointer;">
+                                <i class="fas fa-award text-warning me-1"></i> Include BISE Board 1% Grace Marks
+                                <span class="text-muted fw-normal ms-1 small">(Promotes eligible students with deficit &le; 1% of total exam marks into Pass count)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </form>
 
             @if(isset($reportData))
@@ -55,13 +69,23 @@
                 <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
                     <div>
                         <h5 class="mb-0 fw-bold">Report Results (Admission Year: {{ $selectedYear }})</h5>
-                        <small class="text-muted">
-                            Active Part: 
+                        <div class="d-flex align-items-center gap-2 mt-1 flex-wrap">
                             <span class="badge bg-primary">
                                 {{ ($selectedPart ?? 'combine') == 'part1' ? 'First Year (Part I)' : (($selectedPart ?? '') == 'part2' ? 'Second Year (Part II)' : 'Combine (Part I & II)') }}
                             </span>
-                            &nbsp;|&nbsp; Pass Threshold: <strong>{{ $customPassPercentage ?? 33 }}%</strong>
-                        </small>
+                            <span class="badge bg-light text-dark border">
+                                Threshold: <strong>{{ $customPassPercentage ?? 33 }}%</strong>
+                            </span>
+                            @if($includeGrace ?? true)
+                                <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                                    <i class="fas fa-check-circle me-1"></i> Board 1% Grace: Included
+                                </span>
+                            @else
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border">
+                                    <i class="fas fa-times-circle me-1"></i> Strict Raw Marks (Grace Excluded)
+                                </span>
+                            @endif
+                        </div>
                     </div>
                 </div>
                 <div class="table-responsive mt-2">
@@ -99,7 +123,14 @@
                                             <td rowspan="{{ count($rows) }}" class="align-middle text-center">{{ $row['total_enrolled'] }}</td>
                                         @endif
                                         <td class="text-center">{{ $row['total_assigned'] }}</td>
-                                        <td class="text-center text-success fw-bold">{{ $row['pass'] }}</td>
+                                        <td class="text-center text-success fw-bold">
+                                            {{ $row['pass'] }}
+                                            @if(($includeGrace ?? true) && isset($row['grace']) && $row['grace'] > 0)
+                                                <small class="badge bg-warning bg-opacity-10 text-dark border border-warning ms-1" style="font-size: 0.68rem;" title="{{ $row['grace'] }} student(s) passed via BISE Board 1% Grace Marks">
+                                                    +{{ $row['grace'] }} Grace
+                                                </small>
+                                            @endif
+                                        </td>
                                         <td class="text-center text-danger fw-bold">{{ $row['fail'] }}</td>
                                         <td class="text-center text-warning fw-bold">{{ $row['absent'] }}</td>
                                         <td class="text-center">
