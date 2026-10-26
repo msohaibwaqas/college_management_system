@@ -87,8 +87,14 @@ The **College Management System (CMS)** is a fully integrated, web-based platfor
 └───────────────────────────────┬──────────────────────────────────────────┘
                                 │
 ┌───────────────────────────────▼──────────────────────────────────────────┐
+│                       DOMAIN SERVICES LAYER (OOP)                        │
+│  38+ Specialized Domain Services • Action Handlers • DTOs • Thin Ctrls   │
+│  Reporting Services • BISE Grace Engine • Timetable & Seating Services   │
+└───────────────────────────────┬──────────────────────────────────────────┘
+                                │
+┌───────────────────────────────▼──────────────────────────────────────────┐
 │                              DATA LAYER                                  │
-│  MySQL 8.0 • 118+ Tables • Eloquent ORM • Soft Deletes • Audit Trail     │
+│  MySQL 8.0 • 130+ Tables • Eloquent ORM • Soft Deletes • Audit Trail     │
 │  DomPDF • Maatwebsite Excel • Symfony DomCrawler • Barcode Generator     │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
@@ -149,15 +155,22 @@ Dual-track admissions for both Intermediate (HSSC) and Higher Education (BS/ADP)
 </details>
 
 <details>
-<summary><strong>4. 📝 Examination Management</strong></summary>
+<summary><strong>4. 📝 Examination Management & Academic Reporting</strong></summary>
 
-The most comprehensive module — covering the entire exam lifecycle.
+The most comprehensive module — covering the entire exam lifecycle and advanced board analytics.
 
 - **Datesheets**: Manual or AI-assisted conflict-free schedule generation
 - **Seating Plans**: Anti-cheating algorithm ensures no adjacent same-subject students; handles soft-deleted student records gracefully
 - **Invigilators**: Intelligent auto-assignment with duty fairness, exemptions, and conflict detection; public duty roster
-- **Results**: Test and final result entry (individual & batch), subject-wise analysis, GPA for HE
-- **BISE Integration**: Web scraper that fetches official board results directly from BISE Bahawalpur
+- **Results Management**: Test and final result entry (individual & batch), subject-wise analysis, GPA for Higher Education
+- **BISE Board Integration**: Automated web scraper that fetches official board gazette results directly from BISE Bahawalpur
+- **Final Result Report**: Multi-part performance analytics supporting:
+  - **First Year (Part I)**: Strict Class 11 evaluation against single-part maximums
+  - **Second Year (Part II)**: Class 12 theory and practical breakdown
+  - **Combine (Part I & II)**: Cumulative multi-part board evaluation
+- **BISE Board 1% Grace Policy Engine**: Automatic deficit calculation against the candidate's total maximum exam marks with interactive toggle switches and instant badge views
+- **Detailed Final Result Report**: Full multi-subject student ledger with multi-faith compulsory alignment (Islamiyat $\leftrightarrow$ Religious Education, Tarjuma-tul-Quran $\leftrightarrow$ Ethics), plus 3-column Total metrics (`Obtained | Total | %`) with instant single/multi-column view toggling and Excel export
+- **Subject Final Result Report**: Granular teacher, section, and subject analytics with pass percentages and averages
 </details>
 
 <details>
@@ -240,14 +253,14 @@ Professional public-facing website serving as the institution's digital front do
 </details>
 
 <details>
-<summary><strong>11. 🎨 Admin Dashboard & Theming Engine</strong></summary>
+<summary><strong>11. 🎨 Admin Dashboard, Notifications & Theming Engine</strong></summary>
 
-Powerful analytics hub with full visual customization.
+Powerful analytics hub with full visual customization and interactive notification center.
 
 - **Analytics**: Enrollment stats, fee collection trends, staff ratios, subject distribution, year-over-year admission trends
-- **Theming**: 4 configurable colors (Primary, Secondary, Highlight, Success) via hex color picker
-- **Coverage**: Colors apply to all layouts — Admin, LMS, Library, Login page, and Public website
-- **Implementation**: DB-driven CSS `:root` variable injection on every page load
+- **Unified Dynamic Theming**: Centralized CSS `:root` variable engine (`--col-primary`, `--col-secondary`, `--col-accent`, etc.) loaded dynamically from database settings
+- **Complete Visual Consistency**: Real-time palette cascading across all views — Admin, LMS, Library, Reports, Vouchers, Login, and Public website without compiling assets
+- **Header Notification Center**: Animated notification bell with hover micro-animations (`@keyframes bellRing`), pulsing unread badge (`@keyframes pulseBadge`), and custom scrollbar dropdown
 - One-click reset to default institutional palette
 </details>
 
@@ -411,13 +424,14 @@ This runs PHP dev server, queue listener, Laravel Pail log viewer, and Vite HMR 
 
 | Metric | Count |
 |---|---|
-| **Controllers** | 92 specialized controllers |
-| **Eloquent Models** | 114 models |
-| **Blade Templates** | 220+ across 45+ view directories |
-| **Database Tables** | 118+ with full relational integrity |
+| **Controllers** | 101 specialized thin controllers |
+| **Eloquent Models** | 121 models |
+| **Blade Templates** | 300+ across 45+ view directories |
+| **Database Tables** | 130+ with full relational integrity |
+| **Domain Services** | 38+ dedicated business logic Domain Services (`app/Services/`) |
 | **Supported Programs** | Intermediate (HSSC), BS, ADP |
 | **User Roles** | 7 (Super Admin, Admin, Principal, Teacher, Student, Parent, Accountant) |
-| **Service Classes** | 5+ dedicated business logic services |
+| **Architectural Pattern**| Decoupled OOP Domain Services, Actions, DTOs & Thin Controllers |
 | **Test Coverage** | PHPUnit Feature & Unit tests included |
 
 ---
