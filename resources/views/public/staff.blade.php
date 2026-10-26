@@ -126,10 +126,13 @@
                             </div>
                             @endif
 
-                            @if($staff->email)
-                            <div class="small text-truncate mt-2">
-                                <a href="mailto:{{ $staff->email }}" class="text-muted text-decoration-none" style="font-size: 0.8rem;">
-                                    <i class="fas fa-envelope text-primary me-1"></i> {{ $staff->email }}
+                            @php
+                                $displayEmail = $staff->email ?? ($staff->user?->email);
+                            @endphp
+                            @if($displayEmail)
+                            <div class="small mt-2 px-1 text-break">
+                                <a href="mailto:{{ $displayEmail }}" class="text-muted text-decoration-none" style="font-size: 0.78rem; word-break: break-all;" title="{{ $displayEmail }}">
+                                    <i class="fas fa-envelope text-primary me-1"></i>{{ $displayEmail }}
                                 </a>
                             </div>
                             @endif

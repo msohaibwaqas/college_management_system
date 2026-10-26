@@ -334,6 +334,17 @@ class Staff extends Model
         $this->attributes['email'] = $value ? strtolower(trim($value)) : null;
     }
 
+    public function getDisplayEmailAttribute(): ?string
+    {
+        if (!empty($this->email) && !str_ends_with($this->email, '@college.edu')) {
+            return $this->email;
+        }
+        if ($this->user && !empty($this->user->email) && !str_ends_with($this->user->email, '@college.edu')) {
+            return $this->user->email;
+        }
+        return $this->email ?? ($this->user?->email);
+    }
+
     public function setFirstNameAttribute($value): void
     {
         $this->attributes['first_name'] = trim(ucwords(strtolower($value)));
