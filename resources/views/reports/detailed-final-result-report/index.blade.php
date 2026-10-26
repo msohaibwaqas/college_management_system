@@ -47,6 +47,19 @@
             @if(!empty($selectedYear))
                 <hr class="my-4">
                 @if(count($reportData) > 0)
+                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="mb-0 fw-bold">Detailed Result List (Admission Year: {{ $selectedYear }})</h5>
+                            <small class="text-muted">Total Students: <strong>{{ count($reportData) }}</strong></small>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <button type="button" id="toggleTotalFormatBtn" class="btn btn-sm btn-outline-primary shadow-xs d-inline-flex align-items-center gap-1" onclick="toggleTotalColumns()" data-view="3col">
+                                <i class="fas fa-columns" id="totalToggleIcon"></i>
+                                <span id="totalToggleText">Single Total Column</span>
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="table-responsive">
                         <table class="table table-bordered table-striped table-hover align-middle text-center" id="detailedReportTable" style="font-size: 0.85rem;">
                             <thead class="table-dark">
@@ -64,7 +77,12 @@
                                     <th>Elective 1</th>
                                     <th>Elective 2</th>
                                     <th>Elective 3</th>
-                                    <th class="bg-primary text-white">Total</th>
+                                    {{-- 3 Separate Columns (Default) --}}
+                                    <th class="col-total-3 bg-primary text-white">Obtained</th>
+                                    <th class="col-total-3 bg-primary text-white">Total</th>
+                                    <th class="col-total-3 bg-primary text-white">%</th>
+                                    {{-- 1 Compact Column (Alternative) --}}
+                                    <th class="col-total-1 bg-primary text-white d-none">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -147,7 +165,24 @@
                                                 <span class="d-block text-muted" style="font-size:0.7em;">{{ $row['elective_3']['details'] }}</span>
                                             @endif
                                         </td>
-                                        <td class="fw-bold bg-light">
+                                        {{-- 3 Separate Columns (Default) --}}
+                                        <td class="col-total-3 fw-bold text-success bg-light fs-6">
+                                            {{ $row['total']['obtained'] ?? '-' }}
+                                        </td>
+                                        <td class="col-total-3 fw-bold text-muted bg-light">
+                                            {{ $row['total']['max'] > 0 ? $row['total']['max'] : '-' }}
+                                        </td>
+                                        <td class="col-total-3 bg-light">
+                                            @if(!empty($row['total']['percentage']))
+                                                <span class="badge {{ $row['total']['percentage'] >= 60 ? 'bg-success' : ($row['total']['percentage'] >= 33 ? 'bg-warning text-dark' : 'bg-danger') }}">
+                                                    {{ $row['total']['percentage'] }}%
+                                                </span>
+                                            @else
+                                                <span class="text-muted">-</span>
+                                            @endif
+                                        </td>
+                                        {{-- 1 Compact Column (Alternative) --}}
+                                        <td class="col-total-1 d-none fw-bold bg-light">
                                             <strong class="text-primary">{{ $row['total']['marks'] }}</strong>
                                             @if(!empty($row['total']['percentage']))
                                                 <span class="d-block text-muted" style="font-size:0.72em;">{{ $row['total']['percentage'] }}%</span>
@@ -167,4 +202,49 @@
         </div>
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+function toggleTotalColumns() {
+    const col3 = document.querySelectorAll('.col-total-3');
+    const col1 = document.querySelectorAll('.col-total-1');
+    const btn = document.getElementById('toggleTotalFormatBtn');
+    const icon = document.getElementById('totalToggleIcon');
+    const text = document.getElementById('totalToggleText');
+    if (!btn || !text || !icon) return;
+
+    const currentView = btn.getAttribute('data-view') || '3col';
+
+    if (currentView === '3col') {
+        // Switch to single 1 column
+        col3.forEach(el => el.classList.add('d-none'));
+        col1.forEach(el => el.classList.remove('d-none'));
+        btn.setAttribute('data-view', '1col');
+        text.textContent = 'Split 3 Columns (Obt, Total, %)';
+        icon.className = 'fas fa-th-list';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-primary', 'text-white');
+        try { localStorage.setItem('detailed_report_total_view', '1col'); } catch(e) {}
+    } else {
+        // Switch to separate 3 columns
+        col1.forEach(el => el.classList.add('d-none'));
+        col3.forEach(el => el.classList.remove('d-none'));
+        btn.setAttribute('data-view', '3col');
+        text.textContent = 'Single Total Column';
+        icon.className = 'fas fa-columns';
+        btn.classList.remove('btn-primary', 'text-white');
+        btn.classList.add('btn-outline-primary');
+        try { localStorage.setItem('detailed_report_total_view', '3col'); } catch(e) {}
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        if (localStorage.getItem('detailed_report_total_view') === '1col') {
+            toggleTotalColumns();
+        }
+    } catch(e) {}
+});
+</script>
 @endsection
