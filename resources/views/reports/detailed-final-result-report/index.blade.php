@@ -64,6 +64,7 @@
                                     <th>Elective 1</th>
                                     <th>Elective 2</th>
                                     <th>Elective 3</th>
+                                    <th class="bg-primary text-white">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -144,6 +145,12 @@
                                             <strong>{{ $row['elective_3']['marks'] }}</strong>
                                             @if(!empty($row['elective_3']['details']))
                                                 <span class="d-block text-muted" style="font-size:0.7em;">{{ $row['elective_3']['details'] }}</span>
+                                            @endif
+                                        </td>
+                                        <td class="fw-bold bg-light">
+                                            <strong class="text-primary">{{ $row['total']['marks'] }}</strong>
+                                            @if(!empty($row['total']['percentage']))
+                                                <span class="d-block text-muted" style="font-size:0.72em;">{{ $row['total']['percentage'] }}%</span>
                                             @endif
                                         </td>
                                     </tr>

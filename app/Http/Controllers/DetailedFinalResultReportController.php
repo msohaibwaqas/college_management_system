@@ -209,9 +209,46 @@ class DetailedFinalResultReportController extends Controller
                 return [
                     'name' => $subject->name,
                     'marks' => $marks,
-                    'details' => $details
+                    'details' => $details,
+                    'obtained' => $appeared ? $totalMarks : null,
+                    'max' => $maxMarks,
                 ];
             };
+
+            $englishData = $getRowData($english);
+            $urduData = $getRowData($urdu);
+            $islamicData = $getRowData($islamic);
+            $tarjumaData = $getRowData($tarjuma);
+            $pakStudiesData = $getRowData($pakStudies);
+            $elective1Data = $getRowData($elective1);
+            $elective2Data = $getRowData($elective2);
+            $elective3Data = $getRowData($elective3);
+
+            $subjectList = [
+                $englishData,
+                $urduData,
+                $islamicData,
+                $tarjumaData,
+                $pakStudiesData,
+                $elective1Data,
+                $elective2Data,
+                $elective3Data,
+            ];
+
+            $totalObtained = 0;
+            $totalMax = 0;
+            $hasAnyMarks = false;
+
+            foreach ($subjectList as $sData) {
+                if (isset($sData['obtained']) && $sData['obtained'] !== null) {
+                    $totalObtained += $sData['obtained'];
+                    $totalMax += $sData['max'];
+                    $hasAnyMarks = true;
+                }
+            }
+
+            $totalPercentage = ($hasAnyMarks && $totalMax > 0) ? round(($totalObtained / $totalMax) * 100, 2) : 0;
+            $totalMarksDisplay = $hasAnyMarks ? "{$totalObtained}/{$totalMax}" : '-';
 
             $reportData[] = [
                 'roll_no' => $rollNo,
@@ -219,14 +256,20 @@ class DetailedFinalResultReportController extends Controller
                 'bise_roll_12' => $biseRoll12,
                 'student_name' => $fullName,
                 'father_name' => $fatherName,
-                'english' => $getRowData($english),
-                'urdu' => $getRowData($urdu),
-                'islamic' => $getRowData($islamic),
-                'tarjuma' => $getRowData($tarjuma),
-                'pak_studies' => $getRowData($pakStudies),
-                'elective_1' => $getRowData($elective1),
-                'elective_2' => $getRowData($elective2),
-                'elective_3' => $getRowData($elective3),
+                'english' => $englishData,
+                'urdu' => $urduData,
+                'islamic' => $islamicData,
+                'tarjuma' => $tarjumaData,
+                'pak_studies' => $pakStudiesData,
+                'elective_1' => $elective1Data,
+                'elective_2' => $elective2Data,
+                'elective_3' => $elective3Data,
+                'total' => [
+                    'obtained' => $hasAnyMarks ? $totalObtained : null,
+                    'max' => $totalMax,
+                    'marks' => $totalMarksDisplay,
+                    'percentage' => $totalPercentage,
+                ],
             ];
         }
 

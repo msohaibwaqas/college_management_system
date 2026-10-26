@@ -38,6 +38,7 @@ class DetailedFinalResultExport implements FromCollection, WithHeadings, WithMap
             'Elective 1',
             'Elective 2',
             'Elective 3',
+            'Total',
         ];
     }
 
@@ -68,6 +69,7 @@ class DetailedFinalResultExport implements FromCollection, WithHeadings, WithMap
             $format($row['elective_1']),
             $format($row['elective_2']),
             $format($row['elective_3']),
+            $row['total']['marks'] . (!empty($row['total']['percentage']) ? ' (' . $row['total']['percentage'] . '%)' : ''),
         ];
     }
 }
