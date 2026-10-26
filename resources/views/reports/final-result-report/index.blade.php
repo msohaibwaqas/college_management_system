@@ -87,7 +87,17 @@
                             @endif
                         </div>
                     </div>
+
+                    @if($includeGrace ?? true)
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" id="toggleGraceBadgeBtn" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1 shadow-xs" onclick="toggleGraceBadges()" data-hidden="0">
+                            <i class="fas fa-eye-slash" id="graceToggleIcon"></i>
+                            <span id="graceToggleText">Hide Grace Tags</span>
+                        </button>
+                    </div>
+                    @endif
                 </div>
+
                 <div class="table-responsive mt-2">
                     <table class="table table-bordered table-striped" id="reportTable">
                         <thead class="table-dark">
@@ -126,7 +136,7 @@
                                         <td class="text-center text-success fw-bold">
                                             {{ $row['pass'] }}
                                             @if(($includeGrace ?? true) && isset($row['grace']) && $row['grace'] > 0)
-                                                <small class="badge bg-warning bg-opacity-10 text-dark border border-warning ms-1" style="font-size: 0.68rem;" title="{{ $row['grace'] }} student(s) passed via BISE Board 1% Grace Marks">
+                                                <small class="grace-badge badge bg-warning bg-opacity-10 text-dark border border-warning ms-1" style="font-size: 0.68rem;" title="{{ $row['grace'] }} student(s) passed via BISE Board 1% Grace Marks">
                                                     +{{ $row['grace'] }} Grace
                                                 </small>
                                             @endif
@@ -162,4 +172,46 @@
         </div>
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+function toggleGraceBadges() {
+    const badges = document.querySelectorAll('.grace-badge');
+    const textEl = document.getElementById('graceToggleText');
+    const iconEl = document.getElementById('graceToggleIcon');
+    const btnEl = document.getElementById('toggleGraceBadgeBtn');
+    if (!textEl || !iconEl || !btnEl) return;
+
+    const isCurrentlyHidden = btnEl.getAttribute('data-hidden') === '1';
+
+    if (isCurrentlyHidden) {
+        // Show tags
+        badges.forEach(b => b.classList.remove('d-none'));
+        textEl.textContent = 'Hide Grace Tags';
+        iconEl.className = 'fas fa-eye-slash';
+        btnEl.setAttribute('data-hidden', '0');
+        btnEl.classList.remove('btn-secondary', 'text-white');
+        btnEl.classList.add('btn-outline-secondary');
+        try { localStorage.setItem('hide_grace_badges', '0'); } catch(e) {}
+    } else {
+        // Hide tags
+        badges.forEach(b => b.classList.add('d-none'));
+        textEl.textContent = 'Show Grace Tags';
+        iconEl.className = 'fas fa-eye';
+        btnEl.setAttribute('data-hidden', '1');
+        btnEl.classList.remove('btn-outline-secondary');
+        btnEl.classList.add('btn-secondary', 'text-white');
+        try { localStorage.setItem('hide_grace_badges', '1'); } catch(e) {}
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    try {
+        if (localStorage.getItem('hide_grace_badges') === '1') {
+            toggleGraceBadges();
+        }
+    } catch(e) {}
+});
+</script>
 @endsection
