@@ -33,7 +33,7 @@ class DetailedFinalResultExport implements FromCollection, WithHeadings, WithMap
             'English',
             'Urdu / Alt',
             'Islamic / Alt',
-            'Tarjuma Quran',
+            'Tarjuma Quran / Alt',
             'Pak Studies',
             'Elective 1',
             'Elective 2',

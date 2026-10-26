@@ -59,7 +59,7 @@
                                     <th>English</th>
                                     <th>Urdu / Alt</th>
                                     <th>Islamic / Alt</th>
-                                    <th>Tarjuma Quran</th>
+                                    <th>Tarjuma Quran / Alt</th>
                                     <th>Pak Studies</th>
                                     <th>Elective 1</th>
                                     <th>Elective 2</th>

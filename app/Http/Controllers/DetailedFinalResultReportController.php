@@ -99,9 +99,43 @@ class DetailedFinalResultReportController extends Controller
             // Find specific compulsory subjects
             $english = $compulsory->first(fn($s) => stripos($s->name, 'English') !== false);
             $urdu = $compulsory->first(fn($s) => stripos($s->name, 'Urdu') !== false || stripos($s->name, 'Alternative') !== false || stripos($s->name, 'Pakistani Culture') !== false);
-            $islamic = $compulsory->first(fn($s) => stripos($s->name, 'Islamic') !== false || stripos($s->name, 'Ethics') !== false || stripos($s->name, 'Civics') !== false);
-            $tarjuma = $compulsory->first(fn($s) => stripos($s->name, 'Translation') !== false || stripos($s->name, 'Quran') !== false);
-            $pakStudies = $compulsory->first(fn($s) => stripos($s->name, 'Pakistan Studies') !== false);
+            
+            // Islamiyat / Religious Education (50 marks, Class 11 compulsory pair)
+            $islamic = $compulsory->first(fn($s) => 
+                stripos($s->name, 'Islam') !== false || 
+                stripos($s->name, 'Religious Education') !== false || 
+                stripos($s->name, 'Civics') !== false
+            );
+            
+            // Tarjuma-tul-quran / Ethics (100 marks, Class 11 + Class 12 compulsory pair)
+            $tarjuma = $compulsory->first(fn($s) => 
+                stripos($s->name, 'Quran') !== false || 
+                stripos($s->name, 'Translation') !== false || 
+                stripos($s->name, 'Ethics') !== false || 
+                stripos($s->name, 'Akhlaqiat') !== false
+            );
+            
+            $pakStudies = $compulsory->first(fn($s) => stripos($s->name, 'Pakistan Studies') !== false || stripos($s->name, 'Pak Studies') !== false);
+
+            // Resilient fallbacks in case pivot table lacked a subject but student took exam
+            if (!$islamic && !empty($studentSubjectResults)) {
+                foreach ($studentSubjectResults as $subId => $results) {
+                    $sub = $results->first()?->subject;
+                    if ($sub && (stripos($sub->name, 'Islam') !== false || stripos($sub->name, 'Religious Education') !== false)) {
+                        $islamic = $sub;
+                        break;
+                    }
+                }
+            }
+            if (!$tarjuma && !empty($studentSubjectResults)) {
+                foreach ($studentSubjectResults as $subId => $results) {
+                    $sub = $results->first()?->subject;
+                    if ($sub && (stripos($sub->name, 'Quran') !== false || stripos($sub->name, 'Translation') !== false || stripos($sub->name, 'Ethics') !== false)) {
+                        $tarjuma = $sub;
+                        break;
+                    }
+                }
+            }
 
             // Collect Electives
             $elective1 = $electives->values()->get(0);
@@ -146,11 +180,14 @@ class DetailedFinalResultReportController extends Controller
                 $maxMarks = 0;
                 $p1Text = '-';
                 $p2Text = '-';
-                $prText = '-';
+                $prText = '0';
 
                 if ($p1) {
                     $maxMarks += $p1->total_marks;
                     $p1Text = $p1->is_absent ? 'Abs' : $p1->total_obtained_marks;
+                    if ($p1->obtained_practical !== null) {
+                        $prText = $p1->obtained_practical;
+                    }
                 }
                 
                 if ($p2) {
