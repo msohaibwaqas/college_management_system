@@ -273,6 +273,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('datesheets/generate', [DatesheetController::class, 'generate'])->name('datesheets.generate');
         Route::post('datesheets/generate', [DatesheetController::class, 'storeGenerated'])->name('datesheets.store_generated');
         Route::post('datesheets/bulk-delete', [DatesheetController::class, 'bulkDestroy'])->name('datesheets.bulk_destroy');
+        Route::post('datesheets/name-exam', [DatesheetController::class, 'nameExamRange'])->name('datesheets.name_exam');
         Route::resource('datesheets', DatesheetController::class)->only(['index', 'create', 'store', 'destroy']);
         Route::resource('rooms', RoomController::class);
         Route::get('seating-plans/{seatingPlan}/attendance', [SeatingPlanController::class, 'attendanceSheet'])->name('seating-plans.attendance');

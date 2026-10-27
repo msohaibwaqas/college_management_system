@@ -224,12 +224,12 @@ class Result extends Model
     // Mutators
     public function setObtainedTheoryAttribute($value): void
     {
-        $this->attributes['obtained_theory'] = $value !== '' ? (int)$value : null;
+        $this->attributes['obtained_theory'] = ($value !== '' && $value !== null) ? (int)$value : null;
     }
 
     public function setObtainedPracticalAttribute($value): void
     {
-        $this->attributes['obtained_practical'] = $value !== '' ? (int)$value : null;
+        $this->attributes['obtained_practical'] = ($value !== '' && $value !== null) ? (int)$value : null;
     }
 
     public function setAcademicYearAttribute($value): void

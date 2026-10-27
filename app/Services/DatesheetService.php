@@ -57,7 +57,48 @@ class DatesheetService
      * @param int|null $userId
      * @return array{success: bool, error?: string, saved_count: int, conflicts: array}
      */
-    public function storeManualDatesheet(int $admissionYear, string $testDate, array $subjectIds, ?int $userId = null): array
+    /**
+     * Assign or update exam name for a date range or specific datesheet IDs.
+     */
+    public function nameExamRange(array $data, ?int $userId = null): array
+    {
+        $userId = $userId ?? Auth::id();
+        $examName = trim($data['exam_name'] ?? '');
+        if (empty($examName)) {
+            return ['success' => false, 'error' => 'Exam name is required.', 'updated_count' => 0];
+        }
+
+        $query = Datesheet::query();
+
+        if (!empty($data['ids']) && is_array($data['ids'])) {
+            $query->whereIn('id', $data['ids']);
+        } elseif (!empty($data['start_date']) && !empty($data['end_date'])) {
+            $query->whereBetween('test_date', [$data['start_date'], $data['end_date']]);
+            if (!empty($data['admission_year'])) {
+                $query->where('admission_year', (int) $data['admission_year']);
+            }
+        } else {
+            return ['success' => false, 'error' => 'Please provide either a date range or select specific tests.', 'updated_count' => 0];
+        }
+
+        $count = $query->count();
+        if ($count === 0) {
+            return ['success' => false, 'error' => 'No scheduled tests found matching the selected range.', 'updated_count' => 0];
+        }
+
+        $query->update([
+            'exam_name' => $examName,
+            'updated_by' => $userId,
+        ]);
+
+        return [
+            'success' => true,
+            'exam_name' => $examName,
+            'updated_count' => $count,
+        ];
+    }
+
+    public function storeManualDatesheet(int $admissionYear, string $testDate, array $subjectIds, ?string $examName = null, ?int $userId = null): array
     {
         if (date('N', strtotime($testDate)) == 7) {
             return [
@@ -72,7 +113,7 @@ class DatesheetService
         $conflicts = [];
         $savedCount = 0;
 
-        DB::transaction(function () use ($admissionYear, $testDate, $subjectIds, $userId, &$conflicts, &$savedCount) {
+        DB::transaction(function () use ($admissionYear, $testDate, $subjectIds, $examName, $userId, &$conflicts, &$savedCount) {
             $existingTests = Datesheet::where('test_date', $testDate)
                 ->where('admission_year', $admissionYear)
                 ->get();
@@ -108,6 +149,7 @@ class DatesheetService
                         'admission_year' => $admissionYear,
                         'test_date' => $testDate,
                         'subject_id' => $newSubjectId,
+                        'exam_name' => $examName ?: null,
                         'created_by' => $userId,
                         'updated_by' => $userId,
                     ]);
@@ -191,7 +233,7 @@ class DatesheetService
      * @param int|null $userId
      * @return array{success: bool, total_scheduled: int, errors: array, message?: string}
      */
-    public function generateAutomaticDatesheet(string $startDateStr, string $endDateStr, array $admissionYears, ?int $userId = null): array
+    public function generateAutomaticDatesheet(string $startDateStr, string $endDateStr, array $admissionYears, ?string $examName = null, ?int $userId = null): array
     {
         $userId = $userId ?? Auth::id();
         $startDate = Carbon::parse($startDateStr);
@@ -448,6 +490,7 @@ class DatesheetService
                                 'admission_year' => $year,
                                 'test_date' => $bestDate,
                                 'subject_id' => $sid,
+                                'exam_name' => $examName ?: null,
                                 'created_by' => $userId,
                                 'updated_by' => $userId,
                             ]);

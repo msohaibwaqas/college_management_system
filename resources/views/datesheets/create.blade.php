@@ -33,7 +33,12 @@
                 @csrf
                 <div class="row g-3">
                     <div class="col-md-4">
-                        <label class="form-label">Admission Year</label>
+                        <label class="form-label fw-bold">Exam / Test Name <span class="text-muted fw-normal">(Optional)</span></label>
+                        <input type="text" name="exam_name" id="exam_name" class="form-control" placeholder="e.g. October Test 2026" value="{{ old('exam_name') }}">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Admission Year</label>
                         <select name="admission_year" class="form-select" required>
                             <option value="">Select Year</option>
                             @foreach($admissionYears as $year)
@@ -45,7 +50,7 @@
                     </div>
 
                     <div class="col-md-4">
-                        <label class="form-label">Test Date</label>
+                        <label class="form-label fw-bold">Test Date</label>
                         <input type="date" name="test_date" id="test_date" class="form-control" value="{{ old('test_date') }}" required min="{{ date('Y-m-d') }}">
                         <div class="form-text text-danger d-none" id="sundayError">Tests cannot be scheduled on Sunday.</div>
                     </div>

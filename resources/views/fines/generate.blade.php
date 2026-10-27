@@ -104,20 +104,55 @@
                         <small class="text-muted">Absences in this calendar month will be counted.</small>
                     </div>
 
-                    {{-- Exam Name Picker (For Test Absences & Failures) --}}
+                    {{-- Exam Name Picker (Loaded from Test Attendance & Datesheets) --}}
                     <div class="col-md-4" id="examBox" style="display: none;">
                         <label class="form-label fw-bold small text-dark">
                             <i class="fas fa-file-alt text-danger me-1"></i>Exam / Test Name <span class="text-danger">*</span>
                         </label>
-                        <input type="text" name="exam_name" id="examNameInput" class="form-control" list="examList"
-                               placeholder="e.g. October Test, December Test, Pre-Board..."
-                               value="{{ request('exam_name', 'October Test') }}">
-                        <datalist id="examList">
-                            @foreach($availableExamNames as $en)
-                                <option value="{{ $en }}"></option>
+                        <select name="exam_name" id="examNameSelect" class="form-select">
+                            <option value="">-- Select Exam / Test Name (Preset) --</option>
+                            @foreach($availableExamsWithDetails as $ex)
+                                @php
+                                    $reqName = strtolower(trim((string) request('exam_name')));
+                                    $exName = strtolower(trim((string) $ex['exam_name']));
+                                    $isSelected = ($reqName !== '' && $reqName === $exName)
+                                        || ($reqName === '' && str_contains($exName, 'october test'));
+                                @endphp
+                                <option value="{{ $ex['exam_name'] }}"
+                                        data-start="{{ $ex['start_date'] }}"
+                                        data-end="{{ $ex['end_date'] }}"
+                                        {{ $isSelected ? 'selected' : '' }}>
+                                    {{ $ex['exam_name'] }}
+                                    @if(!empty($ex['range_text'])) ({{ $ex['range_text'] }}) @endif
+                                    @if(($ex['total_absent'] ?? 0) > 0) [{{ $ex['total_absent'] }} absent] @endif
+                                </option>
                             @endforeach
-                        </datalist>
-                        <small class="text-muted">Matches exam name in Results records.</small>
+                            <option value="__custom__" {{ request('exam_name') && !$availableExamsWithDetails->contains(fn($e) => strtolower(trim($e['exam_name'])) === strtolower(trim(request('exam_name')))) ? 'selected' : '' }}>
+                                -- Custom / Type Other Name... --
+                            </option>
+                        </select>
+                        <input type="text" id="customExamInput" class="form-control mt-2"
+                               placeholder="Enter custom exam name..."
+                               value="{{ request('exam_name') }}" style="display: none;">
+                        <small class="text-muted">Loaded directly from Datesheet &amp; Test Attendance.</small>
+                    </div>
+
+                    {{-- Date Range Picker (Optional filter for test absences/failures) --}}
+                    <div class="col-md-4" id="dateRangeBox" style="display: none;">
+                        <label class="form-label fw-bold small text-dark">
+                            <i class="fas fa-calendar-alt text-primary me-1"></i>Test Date Range <span class="text-muted fw-normal">(Optional)</span>
+                        </label>
+                        <div class="row g-1">
+                            <div class="col-6">
+                                <input type="date" name="start_date" id="startDateInput" class="form-control"
+                                       value="{{ request('start_date') }}" placeholder="Start Date">
+                            </div>
+                            <div class="col-6">
+                                <input type="date" name="end_date" id="endDateInput" class="form-control"
+                                       value="{{ request('end_date') }}" placeholder="End Date">
+                            </div>
+                        </div>
+                        <small class="text-muted">Auto-filled from selected test datesheet range.</small>
                     </div>
 
                     {{-- Academic Year --}}
@@ -289,9 +324,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const ruleSelect = document.getElementById('ruleSelect');
     const periodBox = document.getElementById('periodBox');
     const examBox = document.getElementById('examBox');
+    const dateRangeBox = document.getElementById('dateRangeBox');
     const passBox = document.getElementById('passBox');
     const rateInput = document.getElementById('rateInput');
-    const examNameInput = document.getElementById('examNameInput');
+    const examNameSelect = document.getElementById('examNameSelect');
+    const customExamInput = document.getElementById('customExamInput');
+    const startDateInput = document.getElementById('startDateInput');
+    const endDateInput = document.getElementById('endDateInput');
     const passInput = document.getElementById('passInput');
 
     function syncTypeUI() {
@@ -299,16 +338,51 @@ document.addEventListener('DOMContentLoaded', function () {
         if (type === 'lecture_absent') {
             periodBox.style.display = 'block';
             examBox.style.display = 'none';
+            if (dateRangeBox) dateRangeBox.style.display = 'none';
             passBox.style.display = 'none';
         } else if (type === 'test_absent') {
             periodBox.style.display = 'none';
             examBox.style.display = 'block';
+            if (dateRangeBox) dateRangeBox.style.display = 'block';
             passBox.style.display = 'none';
         } else if (type === 'test_fail') {
             periodBox.style.display = 'none';
             examBox.style.display = 'block';
+            if (dateRangeBox) dateRangeBox.style.display = 'block';
             passBox.style.display = 'block';
         }
+    }
+
+    function onExamChange() {
+        if (!examNameSelect) return;
+        const opt = examNameSelect.options[examNameSelect.selectedIndex];
+        if (!opt) return;
+
+        if (opt.value === '__custom__') {
+            customExamInput.style.display = 'block';
+            customExamInput.setAttribute('name', 'exam_name');
+            examNameSelect.removeAttribute('name');
+        } else {
+            customExamInput.style.display = 'none';
+            customExamInput.removeAttribute('name');
+            examNameSelect.setAttribute('name', 'exam_name');
+
+            const start = opt.getAttribute('data-start');
+            const end = opt.getAttribute('data-end');
+            if (start && startDateInput && (!startDateInput.value || startDateInput.dataset.autofilled === 'true')) {
+                startDateInput.value = start;
+                startDateInput.dataset.autofilled = 'true';
+            }
+            if (end && endDateInput && (!endDateInput.value || endDateInput.dataset.autofilled === 'true')) {
+                endDateInput.value = end;
+                endDateInput.dataset.autofilled = 'true';
+            }
+        }
+    }
+
+    if (examNameSelect) {
+        examNameSelect.addEventListener('change', onExamChange);
+        onExamChange();
     }
 
     fineTypeSelect.addEventListener('change', syncTypeUI);
@@ -328,8 +402,30 @@ document.addEventListener('DOMContentLoaded', function () {
             syncTypeUI();
         }
         if (rate) rateInput.value = rate;
-        if (exam) examNameInput.value = exam;
         if (pass && passInput) passInput.value = pass;
+
+        if (exam && examNameSelect) {
+            let matched = false;
+            for (let i = 0; i < examNameSelect.options.length; i++) {
+                const optVal = examNameSelect.options[i].value.toLowerCase().trim();
+                const examLower = exam.toLowerCase().trim();
+                if (optVal === examLower || optVal.includes(examLower) || examLower.includes(optVal)) {
+                    examNameSelect.selectedIndex = i;
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                for (let i = 0; i < examNameSelect.options.length; i++) {
+                    if (examNameSelect.options[i].value === '__custom__') {
+                        examNameSelect.selectedIndex = i;
+                        customExamInput.value = exam;
+                        break;
+                    }
+                }
+            }
+            onExamChange();
+        }
     });
 
     // Checkbox and Submission Logic

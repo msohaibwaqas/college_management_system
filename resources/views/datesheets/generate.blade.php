@@ -33,12 +33,18 @@
                 @csrf
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label">Start Date</label>
+                        <label class="form-label fw-bold">Exam / Test Name <span class="text-muted fw-normal">(Optional)</span></label>
+                        <input type="text" name="exam_name" id="exam_name" class="form-control" placeholder="e.g. October Test 2026, December Test 2026..." value="{{ old('exam_name') }}">
+                        <small class="text-muted">Preset name will automatically populate for test attendance and fines.</small>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Start Date</label>
                         <input type="date" name="start_date" id="start_date" class="form-control" value="{{ old('start_date') }}" required min="{{ date('Y-m-d') }}">
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label">End Date</label>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">End Date</label>
                         <input type="date" name="end_date" id="end_date" class="form-control" value="{{ old('end_date') }}" required min="{{ date('Y-m-d') }}">
                     </div>
 

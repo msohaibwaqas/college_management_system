@@ -164,8 +164,9 @@ $(document).ready(function() {
             select.empty().append('<option value="">Select a test</option>');
             
             response.tests.forEach((test, index) => {
+                const examTag = test.exam_name ? ` [${test.exam_name}]` : '';
                 select.append(`<option value="${index}">
-                    ${test.subject_name} - Class ${test.class_level} (${test.admission_year})
+                    ${test.subject_name} - Class ${test.class_level} (${test.admission_year})${examTag}
                 </option>`);
             });
             
@@ -214,10 +215,24 @@ $(document).ready(function() {
             $('#existingAttendancesDiv').hide();
         }
 
-        // Auto-fill exam name if empty
-        const date = $('#test_date option:selected').text().split('(')[0].trim();
-        if (!$('#exam_name').val()) {
-            $('#exam_name').val(`Test - ${date}`);
+        // Auto-fill preset exam name from datesheet
+        if (test.exam_name) {
+            $('#exam_name').val(test.exam_name);
+            const nameLower = test.exam_name.toLowerCase();
+            if (nameLower.includes('oct')) {
+                $('#exam_type').val('Oct_test');
+            } else if (nameLower.includes('dec')) {
+                $('#exam_type').val('Dec_test');
+            } else if (nameLower.includes('send') || nameLower.includes('pre-board') || nameLower.includes('pre board')) {
+                $('#exam_type').val('Send_up');
+            } else if (nameLower.includes('class')) {
+                $('#exam_type').val('Class_test');
+            }
+        } else {
+            const date = $('#test_date option:selected').text().split('(')[0].trim();
+            if (!$('#exam_name').val()) {
+                $('#exam_name').val(`Test - ${date}`);
+            }
         }
 
         $('#testDetailsCard').fadeIn();

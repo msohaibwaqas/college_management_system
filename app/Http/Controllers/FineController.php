@@ -98,6 +98,7 @@ class FineController extends Controller
         $rules = FineRule::active()->orderBy('name')->get();
         $availableMonths = $this->fineService->getAvailableMonths();
         $availableExamNames = $this->fineService->getAvailableExamNames();
+        $availableExamsWithDetails = $this->fineService->getAvailableExamsWithDetails();
         $currentYear = (int) date('Y');
 
         $previewItems = collect();
@@ -111,6 +112,8 @@ class FineController extends Controller
                 'class_level'     => $request->input('class_level'),
                 'period'          => $request->input('period'),
                 'exam_name'       => $request->input('exam_name'),
+                'start_date'      => $request->input('start_date'),
+                'end_date'        => $request->input('end_date'),
                 'rate'            => $request->input('rate'),
                 'pass_percentage' => $request->input('pass_percentage'),
             ];
@@ -120,7 +123,7 @@ class FineController extends Controller
         }
 
         return view('fines.generate', compact(
-            'rules', 'availableMonths', 'availableExamNames', 'currentYear', 'previewItems', 'hasPreview'
+            'rules', 'availableMonths', 'availableExamNames', 'availableExamsWithDetails', 'currentYear', 'previewItems', 'hasPreview'
         ));
     }
 
@@ -160,8 +163,9 @@ class FineController extends Controller
     {
         $rules = FineRule::orderBy('fine_type')->orderBy('name')->get();
         $availableExamNames = $this->fineService->getAvailableExamNames();
+        $availableExamsWithDetails = $this->fineService->getAvailableExamsWithDetails();
 
-        return view('fines.rules', compact('rules', 'availableExamNames'));
+        return view('fines.rules', compact('rules', 'availableExamNames', 'availableExamsWithDetails'));
     }
 
     /**

@@ -159,7 +159,9 @@ Dual-track admissions for both Intermediate (HSSC) and Higher Education (BS/ADP)
 
 The most comprehensive module — covering the entire exam lifecycle and advanced board analytics.
 
-- **Datesheets**: Manual or AI-assisted conflict-free schedule generation
+- **Datesheets & Exam Naming**: Manual or AI-assisted conflict-free schedule generation, with bulk range exam naming (e.g. `October Test 2026` for `30-10-2026 to 09-11-2026`) and table badges
+- **Test Attendance Integration**: Test attendance marking automatically loads preset exam names and test types from the datesheet range
+- **Dynamic Fine Generation Engine**: Automated fine ledger engine for lecture absences, test absences, and test failures; dynamically loads preset test names and date ranges from test attendance and datesheets, evaluating multi-batch academic years (Classes 11 & 12) seamlessly
 - **Seating Plans**: Anti-cheating algorithm ensures no adjacent same-subject students; handles soft-deleted student records gracefully
 - **Invigilators**: Intelligent auto-assignment with duty fairness, exemptions, and conflict detection; public duty roster
 - **Results Management**: Test and final result entry (individual & batch), subject-wise analysis, GPA for Higher Education

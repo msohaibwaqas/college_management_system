@@ -35,29 +35,115 @@ class FineCalculationService
     }
 
     /**
-     * Get available exam names from results and fine_rules tables.
+     * Get available exams with date range and attendance details from datesheets, results, and rules.
+     */
+    public function getAvailableExamsWithDetails(): Collection
+    {
+        $details = [];
+
+        // 1. From Datesheets (preset named ranges)
+        $datesheetExams = DB::table('datesheets')
+            ->select(
+                'exam_name',
+                DB::raw('MIN(test_date) as start_date'),
+                DB::raw('MAX(test_date) as end_date'),
+                DB::raw('COUNT(*) as total_tests')
+            )
+            ->whereNotNull('exam_name')
+            ->where('exam_name', '!=', '')
+            ->groupBy('exam_name')
+            ->get();
+
+        foreach ($datesheetExams as $ds) {
+            $key = strtolower(trim($ds->exam_name));
+            $start = $ds->start_date ? date('d M Y', strtotime($ds->start_date)) : null;
+            $end = $ds->end_date ? date('d M Y', strtotime($ds->end_date)) : null;
+            $rangeText = ($start && $end) ? ($start === $end ? $start : "$start – $end") : '';
+
+            $details[$key] = [
+                'exam_name'      => $ds->exam_name,
+                'start_date'     => $ds->start_date,
+                'end_date'       => $ds->end_date,
+                'range_text'     => $rangeText,
+                'source'         => 'datesheet',
+                'total_tests'    => (int) $ds->total_tests,
+                'total_students' => 0,
+                'total_absent'   => 0,
+            ];
+        }
+
+        // 2. From Results (where test attendance or test marks have been recorded)
+        $resultExams = DB::table('results')
+            ->select(
+                'exam_name',
+                DB::raw('MIN(DATE(created_at)) as start_date'),
+                DB::raw('MAX(DATE(created_at)) as end_date'),
+                DB::raw('COUNT(*) as total_students'),
+                DB::raw('SUM(CASE WHEN is_absent = 1 THEN 1 ELSE 0 END) as total_absent')
+            )
+            ->whereNotNull('exam_name')
+            ->where('exam_name', '!=', '')
+            ->where('exam_name', '!=', 'Final')
+            ->groupBy('exam_name')
+            ->get();
+
+        foreach ($resultExams as $re) {
+            $key = strtolower(trim($re->exam_name));
+            if (!isset($details[$key])) {
+                $start = $re->start_date ? date('d M Y', strtotime($re->start_date)) : null;
+                $end = $re->end_date ? date('d M Y', strtotime($re->end_date)) : null;
+                $rangeText = ($start && $end) ? ($start === $end ? $start : "$start – $end") : '';
+
+                $details[$key] = [
+                    'exam_name'      => $re->exam_name,
+                    'start_date'     => $re->start_date,
+                    'end_date'       => $re->end_date,
+                    'range_text'     => $rangeText,
+                    'source'         => 'results',
+                    'total_tests'    => 0,
+                    'total_students' => (int) $re->total_students,
+                    'total_absent'   => (int) $re->total_absent,
+                ];
+            } else {
+                $details[$key]['total_students'] = (int) $re->total_students;
+                $details[$key]['total_absent'] = (int) $re->total_absent;
+            }
+        }
+
+        // 3. From Fine Rules
+        $ruleExams = DB::table('fine_rules')
+            ->whereNotNull('exam_name')
+            ->where('exam_name', '!=', '')
+            ->distinct()
+            ->pluck('exam_name');
+
+        foreach ($ruleExams as $rName) {
+            $key = strtolower(trim($rName));
+            if (!isset($details[$key])) {
+                $details[$key] = [
+                    'exam_name'      => $rName,
+                    'start_date'     => null,
+                    'end_date'       => null,
+                    'range_text'     => '',
+                    'source'         => 'rule',
+                    'total_tests'    => 0,
+                    'total_students' => 0,
+                    'total_absent'   => 0,
+                ];
+            }
+        }
+
+        return collect(array_values($details))->sortByDesc(function ($item) {
+            return $item['end_date'] ?? $item['start_date'] ?? '';
+        })->values();
+    }
+
+    /**
+     * Get available exam names from datesheets, results and fine_rules tables.
      */
     public function getAvailableExamNames(): Collection
     {
-        $examNamesFromResults = DB::table('results')
-            ->select('exam_name')
-            ->whereNotNull('exam_name')
-            ->where('exam_name', '!=', '')
-            ->distinct()
-            ->pluck('exam_name');
-
-        $examNamesFromRules = DB::table('fine_rules')
-            ->select('exam_name')
-            ->whereNotNull('exam_name')
-            ->where('exam_name', '!=', '')
-            ->distinct()
-            ->pluck('exam_name');
-
-        return $examNamesFromResults
-            ->merge($examNamesFromRules)
-            ->merge(['October Test', 'December Test'])
-            ->unique()
-            ->values();
+        return $this->getAvailableExamsWithDetails()->pluck('exam_name')->values();
     }
 
     /**
@@ -66,9 +152,11 @@ class FineCalculationService
     public function preview(array $filters): Collection
     {
         $fineType = $filters['fine_type'] ?? 'lecture_absent';
-        $academicYear = (int) ($filters['academic_year'] ?? date('Y'));
+        $academicYear = isset($filters['academic_year']) && $filters['academic_year'] !== '' ? (int) $filters['academic_year'] : (int) date('Y');
         $classLevel = $filters['class_level'] ?? null; // '11', '12', or null/all
         $examName = $filters['exam_name'] ?? null;
+        $startDate = $filters['start_date'] ?? null;
+        $endDate = $filters['end_date'] ?? null;
         $period = $filters['period'] ?? now()->format('Y-m'); // e.g. "2026-10"
 
         // Determine rate and pass percentage
@@ -76,8 +164,9 @@ class FineCalculationService
         if (!empty($filters['fine_rule_id'])) {
             $rule = FineRule::find($filters['fine_rule_id']);
             if ($rule) {
-                $fineType = $rule->fine_type;
-                if ($rule->exam_name) {
+                $fineType = $filters['fine_type'] ?? $rule->fine_type;
+                // Only use rule's exam_name if user didn't specify one
+                if (empty($examName) && $rule->exam_name) {
                     $examName = $rule->exam_name;
                 }
             }
@@ -85,7 +174,7 @@ class FineCalculationService
 
         $rate = isset($filters['rate']) && $filters['rate'] !== ''
             ? (float) $filters['rate']
-            : ($rule ? (float) $rule->amount_per_unit : 1.00);
+            : ($rule ? (float) $rule->amount_per_unit : 100.00);
 
         $passPercentage = isset($filters['pass_percentage']) && $filters['pass_percentage'] !== ''
             ? (float) $filters['pass_percentage']
@@ -93,8 +182,8 @@ class FineCalculationService
 
         return match ($fineType) {
             'lecture_absent' => $this->previewLectureAbsentFines($period, $academicYear, $classLevel, $rate, $rule),
-            'test_absent'    => $this->previewTestAbsentFines($examName, $academicYear, $classLevel, $rate, $rule),
-            'test_fail'      => $this->previewTestFailFines($examName, $academicYear, $classLevel, $rate, $passPercentage, $rule),
+            'test_absent'    => $this->previewTestAbsentFines($examName, $academicYear, $classLevel, $rate, $rule, $startDate, $endDate),
+            'test_fail'      => $this->previewTestFailFines($examName, $academicYear, $classLevel, $rate, $passPercentage, $rule, $startDate, $endDate),
             default          => collect(),
         };
     }
@@ -169,9 +258,9 @@ class FineCalculationService
     /**
      * Preview Test Absence Fines.
      */
-    protected function previewTestAbsentFines(?string $examName, int $academicYear, ?string $classLevel, float $rate, ?FineRule $rule): Collection
+    protected function previewTestAbsentFines(?string $examName, int $academicYear, ?string $classLevel, float $rate, ?FineRule $rule, ?string $startDate = null, ?string $endDate = null): Collection
     {
-        if (!$examName) {
+        if (!$examName && !$startDate && !$endDate) {
             return collect();
         }
 
@@ -182,13 +271,42 @@ class FineCalculationService
                 $join->on('students.id', '=', 'admissions.student_id')
                     ->whereIn('admissions.status', ['active', 'admitted', 'Active', 'Admitted']);
             })
-            ->where('results.exam_name', $examName)
-            ->where('results.academic_year', $academicYear)
             ->where('results.is_absent', 1)
             ->whereNull('results.deleted_at');
 
+        if ($examName) {
+            $query->whereRaw('LOWER(TRIM(results.exam_name)) = ?', [strtolower(trim($examName))]);
+        }
+
+        if ($startDate && $endDate) {
+            $query->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween(DB::raw('DATE(results.created_at)'), [$startDate, $endDate])
+                  ->orWhereExists(function ($sub) use ($startDate, $endDate) {
+                      $sub->select(DB::raw(1))
+                          ->from('datesheets')
+                          ->whereColumn('datesheets.subject_id', 'results.subject_id')
+                          ->whereBetween('datesheets.test_date', [$startDate, $endDate]);
+                  });
+            });
+        }
+
         if ($classLevel && in_array($classLevel, ['11', '12'])) {
-            $query->where('admissions.current_class', $classLevel);
+            $query->where(function ($q) use ($classLevel) {
+                $q->where('admissions.current_class', $classLevel)
+                  ->orWhere('results.class_level', $classLevel);
+            });
+        } elseif ($academicYear) {
+            $query->where(function ($q) use ($academicYear) {
+                $q->where('admissions.academic_year', $academicYear)
+                  ->orWhere('results.academic_year', $academicYear)
+                  ->orWhere(function ($sub) use ($academicYear) {
+                      $sub->where('results.academic_year', $academicYear - 1)
+                          ->where(function ($c) {
+                              $c->where('admissions.current_class', '12')
+                                ->orWhere('results.class_level', '12');
+                          });
+                  });
+            });
         }
 
         $records = $query->select(
@@ -203,16 +321,21 @@ class FineCalculationService
             )
             ->groupBy('students.id', 'students.first_name', 'students.last_name', 'admissions.id', 'admissions.college_roll_no', 'admissions.current_class')
             ->havingRaw('COUNT(results.id) > 0')
-            ->orderBy('admissions.college_roll_no')
+            ->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED), admissions.college_roll_no')
             ->get();
+
+        $resolvedExamName = $examName ?: ($startDate && $endDate ? "Exams ($startDate to $endDate)" : 'Test Exam');
 
         $existingFines = StudentFine::where('fine_type', 'test_absent')
             ->where('academic_year', $academicYear)
-            ->where('exam_name', $examName)
+            ->where(function ($q) use ($resolvedExamName) {
+                $q->where('exam_name', $resolvedExamName)
+                  ->orWhereRaw('LOWER(TRIM(exam_name)) = ?', [strtolower(trim($resolvedExamName))]);
+            })
             ->get()
             ->keyBy('student_id');
 
-        return $records->map(function ($row) use ($rate, $examName, $academicYear, $rule, $existingFines) {
+        return $records->map(function ($row) use ($rate, $resolvedExamName, $academicYear, $rule, $existingFines) {
             $count = (int) $row->absent_papers_count;
             $totalAmount = round($count * $rate, 2);
             $fullName = trim("{$row->first_name} {$row->last_name}");
@@ -226,14 +349,14 @@ class FineCalculationService
                 'admission_id'     => $row->admission_id,
                 'fine_type'        => 'test_absent',
                 'fine_rule_id'     => $rule?->id,
-                'exam_name'        => $examName,
+                'exam_name'        => $resolvedExamName,
                 'subject_id'       => null,
                 'academic_year'    => $academicYear,
-                'period'           => $examName,
+                'period'           => $resolvedExamName,
                 'units_count'      => $count,
                 'amount_per_unit'  => $rate,
                 'total_amount'     => $totalAmount,
-                'reason'           => "Absent from {$count} paper(s) in {$examName} [{$row->missed_subjects}] (Rs. " . number_format($rate, 2) . " / paper)",
+                'reason'           => "Absent from {$count} paper(s) in {$resolvedExamName} [{$row->missed_subjects}] (Rs. " . number_format($rate, 2) . " / paper)",
                 'already_exists'   => $existing !== null,
                 'existing_fine'    => $existing,
             ];
@@ -243,9 +366,9 @@ class FineCalculationService
     /**
      * Preview Test Failure Fines.
      */
-    protected function previewTestFailFines(?string $examName, int $academicYear, ?string $classLevel, float $rate, float $passPercentage, ?FineRule $rule): Collection
+    protected function previewTestFailFines(?string $examName, int $academicYear, ?string $classLevel, float $rate, float $passPercentage, ?FineRule $rule, ?string $startDate = null, ?string $endDate = null): Collection
     {
-        if (!$examName) {
+        if (!$examName && !$startDate && !$endDate) {
             return collect();
         }
 
@@ -256,15 +379,45 @@ class FineCalculationService
                 $join->on('students.id', '=', 'admissions.student_id')
                     ->whereIn('admissions.status', ['active', 'admitted', 'Active', 'Admitted']);
             })
-            ->where('results.exam_name', $examName)
-            ->where('results.academic_year', $academicYear)
             ->where('results.is_absent', 0)
+            ->whereNotNull('results.obtained_theory')
             ->where('results.total_marks', '>', 0)
             ->whereRaw("((COALESCE(results.obtained_theory, 0) + COALESCE(results.obtained_practical, 0)) / results.total_marks) * 100 < ?", [$passPercentage])
             ->whereNull('results.deleted_at');
 
+        if ($examName) {
+            $query->whereRaw('LOWER(TRIM(results.exam_name)) = ?', [strtolower(trim($examName))]);
+        }
+
+        if ($startDate && $endDate) {
+            $query->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween(DB::raw('DATE(results.created_at)'), [$startDate, $endDate])
+                  ->orWhereExists(function ($sub) use ($startDate, $endDate) {
+                      $sub->select(DB::raw(1))
+                          ->from('datesheets')
+                          ->whereColumn('datesheets.subject_id', 'results.subject_id')
+                          ->whereBetween('datesheets.test_date', [$startDate, $endDate]);
+                  });
+            });
+        }
+
         if ($classLevel && in_array($classLevel, ['11', '12'])) {
-            $query->where('admissions.current_class', $classLevel);
+            $query->where(function ($q) use ($classLevel) {
+                $q->where('admissions.current_class', $classLevel)
+                  ->orWhere('results.class_level', $classLevel);
+            });
+        } elseif ($academicYear) {
+            $query->where(function ($q) use ($academicYear) {
+                $q->where('admissions.academic_year', $academicYear)
+                  ->orWhere('results.academic_year', $academicYear)
+                  ->orWhere(function ($sub) use ($academicYear) {
+                      $sub->where('results.academic_year', $academicYear - 1)
+                          ->where(function ($c) {
+                              $c->where('admissions.current_class', '12')
+                                ->orWhere('results.class_level', '12');
+                          });
+                  });
+            });
         }
 
         $records = $query->select(
@@ -279,16 +432,21 @@ class FineCalculationService
             )
             ->groupBy('students.id', 'students.first_name', 'students.last_name', 'admissions.id', 'admissions.college_roll_no', 'admissions.current_class')
             ->havingRaw('COUNT(results.id) > 0')
-            ->orderBy('admissions.college_roll_no')
+            ->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED), admissions.college_roll_no')
             ->get();
+
+        $resolvedExamName = $examName ?: ($startDate && $endDate ? "Exams ($startDate to $endDate)" : 'Test Exam');
 
         $existingFines = StudentFine::where('fine_type', 'test_fail')
             ->where('academic_year', $academicYear)
-            ->where('exam_name', $examName)
+            ->where(function ($q) use ($resolvedExamName) {
+                $q->where('exam_name', $resolvedExamName)
+                  ->orWhereRaw('LOWER(TRIM(exam_name)) = ?', [strtolower(trim($resolvedExamName))]);
+            })
             ->get()
             ->keyBy('student_id');
 
-        return $records->map(function ($row) use ($rate, $examName, $academicYear, $rule, $passPercentage, $existingFines) {
+        return $records->map(function ($row) use ($rate, $resolvedExamName, $academicYear, $rule, $passPercentage, $existingFines) {
             $count = (int) $row->failed_subjects_count;
             $totalAmount = round($count * $rate, 2);
             $fullName = trim("{$row->first_name} {$row->last_name}");
@@ -302,14 +460,14 @@ class FineCalculationService
                 'admission_id'     => $row->admission_id,
                 'fine_type'        => 'test_fail',
                 'fine_rule_id'     => $rule?->id,
-                'exam_name'        => $examName,
+                'exam_name'        => $resolvedExamName,
                 'subject_id'       => null,
                 'academic_year'    => $academicYear,
-                'period'           => $examName,
+                'period'           => $resolvedExamName,
                 'units_count'      => $count,
                 'amount_per_unit'  => $rate,
                 'total_amount'     => $totalAmount,
-                'reason'           => "Failed in {$count} subject(s) in {$examName} (< {$passPercentage}% marks) [{$row->failed_subjects}] (Rs. " . number_format($rate, 2) . " / subject)",
+                'reason'           => "Failed in {$count} subject(s) in {$resolvedExamName} (< {$passPercentage}% marks) [{$row->failed_subjects}] (Rs. " . number_format($rate, 2) . " / subject)",
                 'already_exists'   => $existing !== null,
                 'existing_fine'    => $existing,
             ];

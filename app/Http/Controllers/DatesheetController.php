@@ -35,11 +35,32 @@ class DatesheetController extends Controller
         return view('datesheets.create', compact('admissionYears', 'subjects'));
     }
 
+    public function nameExamRange(Request $request)
+    {
+        $request->validate([
+            'exam_name' => 'required|string|max:150',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'admission_year' => 'nullable|integer',
+            'ids' => 'nullable|array',
+            'ids.*' => 'exists:datesheets,id',
+        ]);
+
+        $result = $this->datesheetService->nameExamRange($request->all(), \Illuminate\Support\Facades\Auth::id());
+
+        if (!$result['success']) {
+            return back()->with('error', $result['error'])->withInput();
+        }
+
+        return back()->with('success', "Assigned exam name '{$result['exam_name']}' to {$result['updated_count']} scheduled test(s).");
+    }
+
     public function store(Request $request)
     {
         $request->validate([
             'admission_year' => 'required|integer',
             'test_date' => 'required|date|after_or_equal:today',
+            'exam_name' => 'nullable|string|max:150',
             'subject_ids' => 'required|array',
             'subject_ids.*' => 'exists:subjects,id',
         ]);
@@ -47,7 +68,8 @@ class DatesheetController extends Controller
         $result = $this->datesheetService->storeManualDatesheet(
             (int) $request->admission_year,
             $request->test_date,
-            $request->subject_ids
+            $request->subject_ids,
+            $request->input('exam_name')
         );
 
         if (!$result['success']) {
@@ -106,6 +128,7 @@ class DatesheetController extends Controller
         $request->validate([
             'start_date' => 'required|date|after_or_equal:today',
             'end_date' => 'required|date|after:start_date',
+            'exam_name' => 'nullable|string|max:150',
             'admission_years' => 'required|array',
             'admission_years.*' => 'integer',
         ]);
@@ -113,7 +136,8 @@ class DatesheetController extends Controller
         $result = $this->datesheetService->generateAutomaticDatesheet(
             $request->start_date,
             $request->end_date,
-            $request->admission_years
+            $request->admission_years,
+            $request->input('exam_name')
         );
 
         if (!$result['success']) {

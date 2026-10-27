@@ -334,6 +334,7 @@ class ResultService
                 'subject_id' => $test->subject_id,
                 'subject_name' => $test->subject?->name ?? 'Unknown',
                 'subject_type' => $test->subject?->type ?? 'Unknown',
+                'exam_name' => $test->exam_name,
                 'existing_exams' => $existingExams,
                 'latest_exam_info' => $latestResult ? [
                     'exam_type' => $latestResult->exam_type,

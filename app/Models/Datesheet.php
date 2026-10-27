@@ -13,6 +13,7 @@ class Datesheet extends Model
         'test_date',
         'admission_year',
         'subject_id',
+        'exam_name',
         'created_by',
         'updated_by',
     ];
