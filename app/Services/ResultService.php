@@ -298,10 +298,17 @@ class ResultService
     /**
      * Get scheduled test details for a specific date with batch & exam metadata.
      */
-    public function getTestDetailsForDate(string $testDate, ?\App\Models\Staff $staff = null): \Illuminate\Support\Collection
+    public function getTestDetailsForDate(string $testDate, ?\App\Models\Staff $staff = null, ?string $examName = null): \Illuminate\Support\Collection
     {
         $query = \App\Models\Datesheet::with(['subject'])
             ->whereDate('test_date', $testDate);
+
+        if ($examName && $examName !== 'Other / Unassigned' && $examName !== '__all__') {
+            $query->where(function ($q) use ($examName) {
+                $q->where('exam_name', $examName)
+                  ->orWhereNull('exam_name');
+            });
+        }
 
         if ($staff) {
             $this->scopeToTeacherSubjects($query, $staff);

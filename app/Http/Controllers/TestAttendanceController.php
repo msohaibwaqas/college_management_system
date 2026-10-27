@@ -18,25 +18,16 @@ class TestAttendanceController extends Controller
      */
     public function create()
     {
-        // Get all scheduled test dates from datesheets
-        // We want to show tests so the user can pick one to mark attendance for.
-        // Similar to ResultController::create
-        
+        $isTeacher = Auth::check() && Auth::user()->isTeacher();
+        $staff = $isTeacher ? Auth::user()->staff : null;
+
         $query = Datesheet::with(['subject'])
-            ->select('test_date', 'admission_year', 'subject_id')
+            ->select('id', 'test_date', 'admission_year', 'subject_id', 'exam_name')
             ->orderBy('test_date');
 
-        // Logic for filtering by teacher if necessary?
-        // "user select Test Date and then Select Test"
-        // If the user is a teacher, they should strictly see their own subjects?
-        // Assuming yes for consistency.
-        
-        $isTeacher = Auth::check() && Auth::user()->isTeacher();
-
         if ($isTeacher) {
-            $staff = Auth::user()->staff;
             if ($staff) {
-                $query->whereIn('subject_id', function($q) use ($staff) {
+                $query->whereIn('subject_id', function ($q) use ($staff) {
                     $q->select('subject_id')
                       ->from('student_teacher_subjects')
                       ->where('staff_id', $staff->id);
@@ -46,18 +37,66 @@ class TestAttendanceController extends Controller
             }
         }
 
-        $testDates = $query->get()
-            ->groupBy(function($item) {
-                return $item->test_date->format('Y-m-d');
-            })
-            ->map(function($group) {
-                return [
-                    'date' => $group->first()->test_date,
-                    'tests' => $group
-                ];
-            });
+        $allDatesheets = $query->get();
 
-        return view('test-attendance.create', compact('testDates'));
+        // Group by exam_name
+        $grouped = $allDatesheets->groupBy(function ($item) {
+            return $item->exam_name ?: 'Other / Unassigned';
+        });
+
+        $examGroups = [];
+        foreach ($grouped as $name => $items) {
+            $dates = $items->groupBy(fn ($i) => $i->test_date->format('Y-m-d'));
+            $minDate = $items->min('test_date');
+            $maxDate = $items->max('test_date');
+
+            $rangeStr = '';
+            if ($minDate && $maxDate) {
+                $rangeStr = $minDate->format('d M Y') === $maxDate->format('d M Y')
+                    ? $minDate->format('d M Y')
+                    : $minDate->format('d M Y') . ' – ' . $maxDate->format('d M Y');
+            }
+
+            $dateList = [];
+            foreach ($dates as $dateKey => $dateItems) {
+                $dateList[] = [
+                    'date_key' => $dateKey,
+                    'formatted' => $dateItems->first()->test_date->format('l, d F Y'),
+                    'test_count' => $dateItems->count(),
+                ];
+            }
+
+            $isOther = ($name === 'Other / Unassigned');
+
+            $examGroups[] = [
+                'name' => $name,
+                'key' => $name,
+                'is_other' => $isOther,
+                'display_label' => $isOther ? $name : "$name ($rangeStr)",
+                'start_date' => $minDate ? $minDate->format('Y-m-d') : null,
+                'end_date' => $maxDate ? $maxDate->format('Y-m-d') : null,
+                'dates' => $dateList,
+                'total_tests' => $items->count(),
+            ];
+        }
+
+        usort($examGroups, function ($a, $b) {
+            if ($a['is_other'] !== $b['is_other']) {
+                return $a['is_other'] ? 1 : -1;
+            }
+            return strcmp($b['end_date'] ?? '', $a['end_date'] ?? '');
+        });
+
+        $testDates = $allDatesheets->groupBy(function ($item) {
+            return $item->test_date->format('Y-m-d');
+        })->map(function ($group) {
+            return [
+                'date' => $group->first()->test_date,
+                'tests' => $group
+            ];
+        });
+
+        return view('test-attendance.create', compact('examGroups', 'testDates'));
     }
 
     /**

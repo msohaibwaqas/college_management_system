@@ -110,13 +110,15 @@ class ResultController extends Controller
     {
         $request->validate([
             'test_date' => 'required|date',
+            'exam_name' => 'nullable|string',
         ]);
 
         [$isTeacher, $staff] = $this->resultService->resolveTeacherContext();
 
         $tests = $this->resultService->getTestDetailsForDate(
             $request->test_date,
-            $isTeacher ? $staff : null
+            $isTeacher ? $staff : null,
+            $request->input('exam_name')
         );
 
         return response()->json(['tests' => $tests]);
