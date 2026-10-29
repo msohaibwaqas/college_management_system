@@ -126,7 +126,7 @@
                 @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'accountant', 'hssc_accountant', 'super_admin']) || ($user && $user->is_super_admin))
                     
                     <li>
-                        <a href="#" class="menu-toggle {{ request()->routeIs(['students.*', 'bise-roll-numbers.*', 'staff.student_assignment', 'student-affairs.*']) || ($activeRole != 'teacher' && request()->routeIs('struck-off.*')) ? 'active' : '' }}" data-target="students-menu">
+                        <a href="#" class="menu-toggle {{ request()->routeIs(['students.*', 'bise-roll-numbers.*', 'staff.student_assignment', 'student-affairs.*', 'student-leaves.*']) || ($activeRole != 'teacher' && request()->routeIs('struck-off.*')) ? 'active' : '' }}" data-target="students-menu">
                             <i class="fas fa-user-graduate"></i>
                             <span>Student affairs</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -140,6 +140,11 @@
                                 <li><a href="{{ route('student-affairs.sections.index') }}" class="{{ request()->routeIs('student-affairs.sections.*') ? 'active' : '' }}">Sections</a></li>
                                 <li><a href="{{ route('staff.student_assignment') }}" class="{{ request()->routeIs('staff.student_assignment') ? 'active' : '' }}">Assign Students</a></li>
                                 <li><a href="{{ route('bise-roll-numbers.index') }}" class="{{ request()->routeIs('bise-roll-numbers.*') ? 'active' : '' }}">Add BISE Roll No.</a></li>
+                                <li>
+                                    <a href="{{ route('student-leaves.index') }}" class="{{ request()->routeIs('student-leaves.*') ? 'active' : '' }}">
+                                        <i class="fas fa-calendar-minus me-1 text-warning"></i> Student Leaves
+                                    </a>
+                                </li>
                                 <li>
                                     <a href="{{ route('struck-off.index') }}" class="{{ request()->routeIs('struck-off.index') ? 'active' : '' }}">
                                         <i class="fas fa-user-slash me-1 text-danger"></i> Struck-Off Students
@@ -393,7 +398,7 @@
                 @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'bs_clerk', 'bs_admin', 'teacher', 'bs_accountant']))
                     {{-- Student affairs --}}
                     <li>
-                        <a href="#" class="menu-toggle {{ request()->routeIs(['admissions.*', 'he.roll-numbers.*']) || ($activeRole != 'teacher' && request()->routeIs('struck-off.*')) ? 'active' : '' }}" data-target="he-students-menu">
+                        <a href="#" class="menu-toggle {{ request()->routeIs(['admissions.*', 'he.roll-numbers.*', 'student-leaves.*']) || ($activeRole != 'teacher' && request()->routeIs('struck-off.*')) ? 'active' : '' }}" data-target="he-students-menu">
                             <i class="fas fa-user-graduate"></i>
                             <span>Student affairs</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -402,6 +407,11 @@
                             <li><a href="{{ route('admissions.index') }}" class="{{ request()->routeIs('admissions.*') ? 'active' : '' }}">Students</a></li>
                             <li><a href="{{ route('he.roll-numbers.index') }}" class="{{ request()->routeIs('he.roll-numbers.*') ? 'active' : '' }}">University Roll Nos</a></li>
                             @if($activeRole != 'teacher')
+                            <li>
+                                <a href="{{ route('student-leaves.index') }}" class="{{ request()->routeIs('student-leaves.*') ? 'active' : '' }}">
+                                    <i class="fas fa-calendar-minus me-1 text-warning"></i> Student Leaves
+                                </a>
+                            </li>
                             <li><a href="{{ route('struck-off.index') }}" class="{{ request()->routeIs('struck-off.index') ? 'active' : '' }}"><i class="fas fa-user-slash text-danger me-1"></i> Struck-Off Students</a></li>
                             <li><a href="{{ route('struck-off.teacher') }}" class="{{ request()->routeIs('struck-off.teacher') ? 'active' : '' }}"><i class="fas fa-user-times text-warning me-1"></i> Strike Off Eligible</a></li>
                             @endif

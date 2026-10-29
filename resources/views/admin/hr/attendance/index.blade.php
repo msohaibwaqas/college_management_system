@@ -48,11 +48,11 @@
     </div>
 
     @if($holiday)
-        <div class="alert alert-info border-info shadow-sm d-flex align-items-center">
-            <i class="fas fa-calendar-star fa-2x me-3"></i>
+        <div class="alert alert-warning border-warning shadow-sm d-flex align-items-center">
+            <i class="fas fa-calendar-times fa-2x text-warning me-3"></i>
             <div>
-                <h5 class="mb-0 fw-bold">{{ $holiday->title }}</h5>
-                <p class="mb-0 small">The selected date is marked as a {{ $holiday->type }} holiday. Attendance is automatically bypassed.</p>
+                <h5 class="mb-0 fw-bold"><i class="fas fa-umbrella-beach me-2"></i>{{ $holiday->title }}</h5>
+                <p class="mb-0 small">The selected date falls under an official holiday / vacation period. Attendance marking is strictly locked to prevent unverified record insertion and calculation mismatches.</p>
             </div>
         </div>
     @endif
@@ -144,9 +144,15 @@
                 </div>
 
                 <div class="mt-4 text-end">
-                    <button type="submit" class="btn btn-primary btn-lg px-5">
-                        <i class="fas fa-save me-2"></i>Save Attendance Records
-                    </button>
+                    @if($holiday)
+                        <button type="button" class="btn btn-secondary btn-lg px-5" disabled>
+                            <i class="fas fa-lock me-2"></i>Attendance Marking Locked for Holidays/Vacations
+                        </button>
+                    @else
+                        <button type="submit" class="btn btn-primary btn-lg px-5">
+                            <i class="fas fa-save me-2"></i>Save Attendance Records
+                        </button>
+                    @endif
                 </div>
             </form>
         </div>

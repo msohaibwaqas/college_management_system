@@ -372,7 +372,8 @@ class StudentController extends Controller
             'electives.subject',
             'studentTeacherSubjects.staff',
             'studentTeacherSubjects.subject',
-            'results.subject'
+            'results.subject',
+            'leaves.markedBy'
         ]);
 
         return view('students.show', compact('student'));

@@ -47,6 +47,9 @@
             <a href="{{ route('students.edit', [$student->id, 'redirect_to' => $backUrl]) }}" class="btn btn-primary ms-2">
                 <i class="fas fa-edit me-1"></i>Edit Student
             </a>
+            <a href="{{ route('student-leaves.create', ['student_id' => $student->id]) }}" class="btn btn-warning ms-2">
+                <i class="fas fa-calendar-plus me-1"></i>Mark Leave
+            </a>
             @php
                 $latestAdmission = $student->admissions()->latest()->first();
                 $isClass12 = $latestAdmission && $latestAdmission->current_class === '12';
@@ -378,6 +381,95 @@
                             <li class="list-group-item text-muted">No elective subjects assigned</li>
                         @endforelse
                     </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Leaves & Permissions -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-3 shadow-sm">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-calendar-minus me-2"></i>Institutional Leaves &amp; Permissions</h5>
+                    <div>
+                        @if($activeRole != 'teacher')
+                            <a href="{{ route('student-leaves.create', ['student_id' => $student->id]) }}" class="btn btn-sm btn-dark">
+                                <i class="fas fa-calendar-plus me-1"></i>Mark New Leave
+                            </a>
+                        @endif
+                        <span class="badge bg-dark ms-2">{{ $student->leaves->count() }} Total</span>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-3">Leave Period</th>
+                                    <th>Duration</th>
+                                    <th>Type</th>
+                                    <th>Reason</th>
+                                    <th>Approved By</th>
+                                    <th>Recorded By</th>
+                                    <th>Status</th>
+                                    <th class="text-end pe-3">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($student->leaves as $lv)
+                                    @php
+                                        $isNow = $lv->isActiveOn(now());
+                                    @endphp
+                                    <tr class="{{ $isNow ? 'table-warning bg-opacity-25' : '' }}">
+                                        <td class="ps-3 fw-semibold">
+                                            {{ $lv->start_date->format('d M Y') }} &mdash; {{ $lv->end_date->format('d M Y') }}
+                                            @if($isNow)
+                                                <span class="badge bg-warning text-dark d-block mt-1" style="font-size: 0.65rem;">
+                                                    <i class="fas fa-user-clock"></i> Active Today
+                                                </span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info text-dark">
+                                                {{ $lv->days_count }} Day{{ $lv->days_count > 1 ? 's' : '' }}
+                                            </span>
+                                        </td>
+                                        <td>{{ $lv->leave_type_label }}</td>
+                                        <td>
+                                            <div class="small text-truncate" style="max-width: 280px;" title="{{ $lv->reason }}">
+                                                {{ $lv->reason }}
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-success-subtle text-success border">
+                                                {{ $lv->approved_by }}
+                                            </span>
+                                        </td>
+                                        <td class="small">{{ $lv->markedBy?->name ?? 'Staff' }}</td>
+                                        <td>
+                                            @if($lv->status === 'approved')
+                                                <span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Approved</span>
+                                            @else
+                                                <span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i>Cancelled</span>
+                                            @endif
+                                        </td>
+                                        <td class="text-end pe-3">
+                                            <a href="{{ route('student-leaves.show', $lv) }}" class="btn btn-outline-primary btn-sm">
+                                                <i class="fas fa-eye me-1"></i>Details
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="8" class="text-center py-4 text-muted">
+                                            No institutional leaves recorded for this student.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>

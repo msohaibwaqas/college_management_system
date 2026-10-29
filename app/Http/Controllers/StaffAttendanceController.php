@@ -70,6 +70,12 @@ class StaffAttendanceController extends Controller
 
         $date = $validated['date'];
 
+        [$isOff, $reason] = $this->academicCalendarService->checkIfSundayOrHoliday($date);
+        if ($isOff) {
+            return redirect()->route('staff.attendance.index', ['date' => $date])
+                ->with('error', "Staff attendance cannot be recorded on {$date} because it is an official {$reason}. Attendance marking is locked during vacations and off days.");
+        }
+
         foreach ($validated['attendance'] as $staffId => $data) {
             StaffDailyAttendance::updateOrCreate(
                 ['staff_id' => $staffId, 'date' => $date],

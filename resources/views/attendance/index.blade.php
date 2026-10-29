@@ -61,7 +61,7 @@
                             <td>
                                 @if(isset($isTodayOff) && $isTodayOff)
                                     <button class="btn btn-secondary btn-sm" disabled title="Attendance cannot be marked today ({{ $todayOffReason }})">
-                                        <i class="fas fa-ban me-1"></i> Closed ({{ str_contains($todayOffReason, 'Sunday') ? 'Sunday' : 'Holiday' }})
+                                        <i class="fas fa-ban me-1"></i> Closed ({{ str_contains($todayOffReason, 'Sunday') ? 'Sunday' : (str_contains($todayOffReason, 'Vacation') ? 'Vacation' : 'Holiday') }})
                                     </button>
                                 @else
                                     <a href="{{ route('attendance.create', [

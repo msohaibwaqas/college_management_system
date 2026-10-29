@@ -188,7 +188,14 @@ class AttendanceController extends Controller
             ->get()
             ->keyBy('student_id');
 
-        return view('attendance.create', compact('students', 'subject', 'class', 'year', 'date', 'existingAttendance', 'availableSections', 'section'));
+        // Check active student leaves for this date
+        $activeLeaves = \App\Models\StudentLeave::approved()
+            ->whereIn('student_id', $students->pluck('id'))
+            ->forDate($date)
+            ->get()
+            ->keyBy('student_id');
+
+        return view('attendance.create', compact('students', 'subject', 'class', 'year', 'date', 'existingAttendance', 'availableSections', 'section', 'activeLeaves'));
     }
 
     public function store(MarkAttendanceRequest $request)

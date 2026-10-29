@@ -22,6 +22,7 @@ class AnnouncementService
                 'recipient_group' => implode(',', $validated['recipient_group']),
                 'is_holiday'      => $isHoliday,
                 'holiday_date'    => $isHoliday ? ($validated['holiday_date'] ?? null) : null,
+                'holiday_end_date'=> $isHoliday ? ($validated['holiday_end_date'] ?? null) : null,
                 'scheduled_at'    => $validated['scheduled_at'] ?? null,
                 'created_by'      => $userId,
             ]);

@@ -54,6 +54,18 @@
                     <input type="hidden" name="section" value="{{ $section }}">
                 @endif
 
+                @if(isset($activeLeaves) && $activeLeaves->isNotEmpty())
+                    <div class="alert alert-warning border-start border-warning border-4 mb-3 d-flex align-items-center shadow-sm">
+                        <i class="fas fa-calendar-check fa-2x text-warning me-3"></i>
+                        <div>
+                            <strong>Institutional Approved Leave Active ({{ $activeLeaves->count() }} Student{{ $activeLeaves->count() > 1 ? 's' : '' }}):</strong><br>
+                            <span class="small">
+                                Approved leave has been marked for student(s) below by the Principal/Administration. Their status is set to <strong>Leave (L)</strong> and protected from mass actions ("All Present" / "All Absent") to prevent accidental strike-offs.
+                            </span>
+                        </div>
+                    </div>
+                @endif
+
                 <div class="row mb-3">
                     <div class="col-md-12">
                         <div class="btn-group" role="group">
@@ -111,11 +123,24 @@
                         <tbody>
                             @forelse($students as $student)
                                 @php
-                                    $status = $existingAttendance[$student->id]->status ?? 'absent';
-                                    $remarks = $existingAttendance[$student->id]->remarks ?? '';
+                                    $leave = $activeLeaves[$student->id] ?? null;
+                                    $isOnLeave = !is_null($leave);
+                                    $existing = $existingAttendance[$student->id] ?? null;
+                                    $status = $existing ? $existing->status : ($isOnLeave ? 'leave' : 'absent');
+                                    if ($isOnLeave && (!$existing || $existing->status === 'absent')) {
+                                        $status = 'leave';
+                                    }
+                                    $remarks = $existing ? $existing->remarks : ($isOnLeave ? "Approved Leave: {$leave->reason}" : '');
                                 @endphp
-                                <tr style="{{ $student->row_bg_style ?? '' }}">
-                                    <td class="text-nowrap fw-bold">{{ $student->roll_number }}</td>
+                                <tr data-on-leave="{{ $isOnLeave ? 'true' : 'false' }}" style="{{ $isOnLeave ? 'background-color: rgba(255, 193, 7, 0.15) !important;' : ($student->row_bg_style ?? '') }}">
+                                    <td class="text-nowrap fw-bold">
+                                        {{ $student->roll_number }}
+                                        @if($isOnLeave)
+                                            <span class="badge bg-warning text-dark d-block mt-1" style="font-size: 0.7rem;" title="{{ $leave->reason }}">
+                                                <i class="fas fa-calendar-check"></i> On Leave
+                                            </span>
+                                        @endif
+                                    </td>
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
                                             <input type="radio" class="btn-check attendance-radio" name="attendance[{{ $student->id }}]" id="present_{{ $student->id }}" value="present" {{ $status == 'present' ? 'checked' : '' }}>
@@ -125,14 +150,18 @@
                                             <label class="btn btn-outline-danger btn-sm" for="absent_{{ $student->id }}">A</label>
 
                                             <input type="radio" class="btn-check attendance-radio" name="attendance[{{ $student->id }}]" id="leave_{{ $student->id }}" value="leave" {{ $status == 'leave' ? 'checked' : '' }}>
-                                            <label class="btn btn-outline-warning btn-sm" for="leave_{{ $student->id }}">L</label>
+                                            <label class="btn {{ $isOnLeave ? 'btn-warning fw-bold' : 'btn-outline-warning' }} btn-sm" for="leave_{{ $student->id }}">L</label>
 
                                             <input type="radio" class="btn-check attendance-radio" name="attendance[{{ $student->id }}]" id="late_{{ $student->id }}" value="late" {{ $status == 'late' ? 'checked' : '' }}>
                                             <label class="btn btn-outline-info btn-sm" for="late_{{ $student->id }}">Late</label>
                                         </div>
                                     </td>
                                     <td class="text-center text-nowrap">
-                                        @if(isset($student->recent_status_label))
+                                        @if($isOnLeave)
+                                            <span class="badge bg-warning text-dark px-2 py-1 fw-bold" title="Approved by: {{ $leave->approved_by }} ({{ $leave->formatted_date_range }})">
+                                                <i class="fas fa-umbrella-beach me-1"></i>Approved Leave
+                                            </span>
+                                        @elseif(isset($student->recent_status_label))
                                             <span class="badge px-2 py-1 fw-normal" style="{{ $student->recent_badge_style }}">
                                                 {{ $student->recent_status_label }}
                                             </span>
@@ -144,6 +173,11 @@
                                         {{ $student->first_name }} {{ $student->last_name }}
                                         @if(!empty($student->effective_section))
                                             <span class="badge bg-secondary text-white ms-2">{{ $student->effective_section }}</span>
+                                        @endif
+                                        @if($isOnLeave)
+                                            <div class="small text-muted fst-italic mt-1" style="font-size: 0.75rem;">
+                                                <i class="fas fa-info-circle text-warning"></i> Leave: {{ \Illuminate\Support\Str::limit($leave->reason, 35) }} ({{ $leave->days_count }}d)
+                                            </div>
                                         @endif
                                     </td>
                                     <td class="col-name-father">{{ $student->father_name }}</td>
@@ -178,7 +212,12 @@
 $(document).ready(function() {
     $('.mark-all').on('click', function() {
         var status = $(this).data('status');
-        $('input[value="' + status + '"].attendance-radio').prop('checked', true);
+        $('tbody tr').each(function() {
+            // Protect students on approved leave from being overwritten by mass actions
+            if ($(this).attr('data-on-leave') !== 'true') {
+                $(this).find('input[value="' + status + '"].attendance-radio').prop('checked', true);
+            }
+        });
     });
 });
 </script>

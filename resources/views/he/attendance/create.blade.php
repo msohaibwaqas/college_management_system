@@ -22,6 +22,18 @@
         @csrf
         <input type="hidden" name="subject_id" value="{{ $subject->id }}">
         
+        @if(isset($activeLeaves) && $activeLeaves->isNotEmpty())
+            <div class="alert alert-warning border-start border-warning border-4 mb-4 d-flex align-items-center shadow-sm">
+                <i class="fas fa-calendar-check fa-2x text-warning me-3"></i>
+                <div>
+                    <strong>Institutional Approved Leave Active ({{ $activeLeaves->count() }} Student{{ $activeLeaves->count() > 1 ? 's' : '' }}):</strong><br>
+                    <span class="small">
+                        Approved leave has been recorded by Administration. Affected students are set to <strong>Leave (L)</strong> and protected from "All Present" / "All Absent" mass selection to avoid strike-offs.
+                    </span>
+                </div>
+            </div>
+        @endif
+
         <div class="card mb-4">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-calendar me-2"></i>Attendance Date</h5>
@@ -68,13 +80,35 @@
                         <tbody>
                             @forelse($students as $index => $student)
                                 @php
+                                    $leave = isset($activeLeaves[$student->student_id]) ? $activeLeaves[$student->student_id] : null;
+                                    $isOnLeave = !is_null($leave);
                                     $existing = $existingAttendance[$student->he_admission_id] ?? null;
-                                    $currentStatus = $existing ? $existing->status : 'present';
+                                    $currentStatus = $existing ? $existing->status : ($isOnLeave ? 'leave' : 'present');
+                                    if ($isOnLeave && (!$existing || $existing->status === 'absent')) {
+                                        $currentStatus = 'leave';
+                                    }
                                 @endphp
-                                <tr>
+                                <tr data-on-leave="{{ $isOnLeave ? 'true' : 'false' }}" style="{{ $isOnLeave ? 'background-color: rgba(255, 193, 7, 0.15) !important;' : '' }}">
                                     <td>{{ $index + 1 }}</td>
-                                    <td><strong>{{ $student->roll_no }}</strong></td>
-                                    <td>{{ $student->first_name }} {{ $student->last_name }}</td>
+                                    <td>
+                                        <strong>{{ $student->roll_no }}</strong>
+                                        @if($isOnLeave)
+                                            <span class="badge bg-warning text-dark d-block mt-1" style="font-size: 0.65rem;">
+                                                <i class="fas fa-calendar-check"></i> On Leave
+                                            </span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        {{ $student->first_name }} {{ $student->last_name }}
+                                        @if($isOnLeave)
+                                            <span class="badge bg-warning text-dark ms-2" title="{{ $leave->reason }} ({{ $leave->formatted_date_range }})">
+                                                <i class="fas fa-calendar-check me-1"></i> Approved Leave ({{ $leave->days_count }}d)
+                                            </span>
+                                            <div class="small text-muted fst-italic mt-1" style="font-size: 0.75rem;">
+                                                Reason: {{ \Illuminate\Support\Str::limit($leave->reason, 40) }}
+                                            </div>
+                                        @endif
+                                    </td>
                                     <td class="text-center">
                                         <div class="btn-group" role="group">
                                             <input type="radio" class="btn-check attendance-radio" 
@@ -100,7 +134,7 @@
                                                    id="leave_{{ $student->he_admission_id }}" 
                                                    value="leave"
                                                    {{ $currentStatus == 'leave' ? 'checked' : '' }}>
-                                            <label class="btn btn-outline-warning btn-sm" for="leave_{{ $student->he_admission_id }}">
+                                            <label class="btn {{ $isOnLeave ? 'btn-warning fw-bold' : 'btn-outline-warning' }} btn-sm" for="leave_{{ $student->he_admission_id }}">
                                                 <i class="fas fa-calendar-minus"></i> L
                                             </label>
 
@@ -118,7 +152,7 @@
                                         <input type="text" name="remarks[{{ $student->he_admission_id }}]" 
                                                class="form-control form-control-sm" 
                                                placeholder="Optional remarks"
-                                               value="{{ $existing->remarks ?? '' }}">
+                                               value="{{ $existing->remarks ?? ($isOnLeave ? "Approved Leave: {$leave->reason}" : '') }}">
                                     </td>
                                 </tr>
                             @empty
@@ -150,7 +184,12 @@
 $(document).ready(function() {
     $('.mark-all').on('click', function() {
         var status = $(this).data('status');
-        $('input[value="' + status + '"].attendance-radio').prop('checked', true);
+        $('tbody tr').each(function() {
+            // Protect students on approved leave
+            if ($(this).attr('data-on-leave') !== 'true') {
+                $(this).find('input[value="' + status + '"].attendance-radio').prop('checked', true);
+            }
+        });
     });
 });
 </script>

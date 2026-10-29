@@ -183,6 +183,17 @@ class Student extends Model
         return (float) $this->unpaidFines()->sum(\Illuminate\Support\Facades\DB::raw('COALESCE(total_amount, 0) - COALESCE(paid_amount, 0) - COALESCE(waived_amount, 0)'));
     }
 
+    public function leaves(): HasMany
+    {
+        return $this->hasMany(StudentLeave::class, 'student_id', 'id')->orderByDesc('start_date');
+    }
+
+    public function activeLeave(?string $date = null): ?StudentLeave
+    {
+        $date = $date ?? now()->toDateString();
+        return $this->leaves()->forDate($date)->first();
+    }
+
     /**
      * Returns the active (not-yet-readmitted) struck-off log, if any.
      */

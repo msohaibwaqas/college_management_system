@@ -19,18 +19,18 @@ class MarkHeAttendanceAction
      */
     public function checkRestrictions(User $user, string $date): ?string
     {
-        // Administrative staff bypass restrictions
+        // Strict Vacation / Holiday / Sunday lock: No staff member can mark attendance during this period
+        [$isOff, $reason] = $this->academicCalendarService->checkIfSundayOrHoliday($date);
+        if ($isOff) {
+            return "Attendance cannot be marked on {$date} because it is a {$reason}.";
+        }
+
+        // Administrative staff bypass cutoff restrictions
         if ($user->isAdministrativeStaff()) {
             return null;
         }
 
         if ($user->isTeacher()) {
-            // Check if the date is a Sunday or Holiday (Public or Announced)
-            [$isOff, $reason] = $this->academicCalendarService->checkIfSundayOrHoliday($date);
-            if ($isOff) {
-                return "Attendance cannot be marked on {$date} because it is a {$reason}.";
-            }
-
             $today = date('Y-m-d');
             if ($date !== $today) {
                 return 'Teachers can only mark attendance for the current date.';
@@ -66,15 +66,33 @@ class MarkHeAttendanceAction
         $attendance = $data['attendance'] ?? [];
         $remarks = $data['remarks'] ?? [];
 
+        // Check active approved leaves for these students on this date
+        $heAdmissions = \App\Models\HeAdmission::whereIn('id', array_keys($attendance))->get(['id', 'student_id'])->keyBy('id');
+        $studentIds = $heAdmissions->pluck('student_id')->filter()->unique();
+        $activeLeaves = \App\Models\StudentLeave::approved()->forDate($date)->whereIn('student_id', $studentIds)->get()->keyBy('student_id');
+
         $upsertData = [];
         foreach ($attendance as $heAdmissionId => $status) {
+            $studentRemarks = $remarks[$heAdmissionId] ?? null;
+            $sId = $heAdmissions[$heAdmissionId]->student_id ?? null;
+
+            if ($sId && isset($activeLeaves[$sId])) {
+                $leave = $activeLeaves[$sId];
+                if ($status === 'absent') {
+                    $status = 'leave';
+                    $studentRemarks = $studentRemarks ?: "Approved Leave: {$leave->reason}";
+                } elseif ($status === 'leave' && empty($studentRemarks)) {
+                    $studentRemarks = "Approved Leave: {$leave->reason}";
+                }
+            }
+
             $upsertData[] = [
                 'he_admission_id' => (int) $heAdmissionId,
                 'bs_subject_id'   => $subjectId,
                 'staff_id'        => $staffId,
                 'attendance_date' => $date,
                 'status'          => $status,
-                'remarks'         => $remarks[$heAdmissionId] ?? null,
+                'remarks'         => $studentRemarks,
             ];
         }
 

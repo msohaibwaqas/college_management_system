@@ -121,6 +121,7 @@ class HeAttendanceController extends Controller
             $admission = $assignment->heAdmission;
             return (object)[
                 'he_admission_id' => $admission->id,
+                'student_id' => $admission->student_id,
                 'roll_no' => $admission->roll_no,
                 'first_name' => $admission->student->first_name ?? '',
                 'last_name' => $admission->student->last_name ?? '',
@@ -135,8 +136,16 @@ class HeAttendanceController extends Controller
             ->get()
             ->keyBy('he_admission_id');
 
+        // Check active student leaves for this date
+        $studentIds = $students->pluck('student_id')->filter()->unique()->toArray();
+        $activeLeaves = \App\Models\StudentLeave::approved()
+            ->whereIn('student_id', $studentIds)
+            ->forDate($date)
+            ->get()
+            ->keyBy('student_id');
+
         return view('he.attendance.create', compact(
-            'students', 'subject', 'programId', 'semester', 'year', 'date', 'existingAttendance'
+            'students', 'subject', 'programId', 'semester', 'year', 'date', 'existingAttendance', 'activeLeaves'
         ));
     }
 

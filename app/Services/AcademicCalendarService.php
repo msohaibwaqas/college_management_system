@@ -31,25 +31,54 @@ class AcademicCalendarService
         $holidayAnnouncement = Announcement::where(function ($q) use ($date) {
             $q->where(function ($sub) use ($date) {
                 $sub->where('is_holiday', true)
-                    ->whereDate('holiday_date', $date);
-            })->orWhere(function ($sub) use ($date) {
-                $sub->where('is_holiday', true)
-                    ->whereNull('holiday_date')
-                    ->whereDate('scheduled_at', $date);
+                    ->where(function ($d) use ($date) {
+                        $d->where(function ($range) use ($date) {
+                            $range->whereDate('holiday_date', '<=', $date)
+                                  ->where(function ($end) use ($date) {
+                                      $end->whereDate('holiday_end_date', '>=', $date)
+                                          ->orWhere(function ($single) use ($date) {
+                                              $single->whereNull('holiday_end_date')
+                                                     ->whereDate('holiday_date', $date);
+                                          });
+                                  });
+                        })->orWhere(function ($sched) use ($date) {
+                            $sched->whereNull('holiday_date')
+                                  ->whereDate('scheduled_at', $date);
+                        });
+                    });
             })->orWhere(function ($sub) use ($date) {
                 $sub->where(function ($kw) {
                     $kw->where('title', 'LIKE', '%holiday%')
                        ->orWhere('title', 'LIKE', '%vacation%')
-                       ->orWhere('title', 'LIKE', '%off day%');
+                       ->orWhere('title', 'LIKE', '%off day%')
+                       ->orWhere('title', 'LIKE', '%break%');
                 })
                 ->where(function ($dt) use ($date) {
-                    $dt->whereDate('holiday_date', $date)
-                       ->orWhereDate('scheduled_at', $date);
+                    $dt->where(function ($range) use ($date) {
+                        $range->whereDate('holiday_date', '<=', $date)
+                              ->where(function ($end) use ($date) {
+                                  $end->whereDate('holiday_end_date', '>=', $date)
+                                      ->orWhere(function ($single) use ($date) {
+                                          $single->whereNull('holiday_end_date')
+                                                 ->whereDate('holiday_date', $date);
+                                      });
+                              });
+                    })->orWhereDate('scheduled_at', $date);
                 });
             });
-        })->first();
+        })
+        ->orderByDesc('is_holiday')
+        ->orderByDesc('holiday_end_date')
+        ->latest('id')
+        ->first();
 
         if ($holidayAnnouncement) {
+            if ($holidayAnnouncement->isVacationRange()) {
+                $startFmt = $holidayAnnouncement->holiday_date->format('d M Y');
+                $endFmt = $holidayAnnouncement->holiday_end_date->format('d M Y');
+                return [true, "Announced Vacation: {$holidayAnnouncement->title} ({$startFmt} to {$endFmt})"];
+            }
+
             return [true, "Announced Holiday: {$holidayAnnouncement->title}"];
         }
 

@@ -530,5 +530,17 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{fine}/waive', [\App\Http\Controllers\FineController::class, 'waiveFine'])->name('waive');
     });
 
+    // Student Leaves Management (Admin, Principal, Clerk)
+    Route::prefix('student-leaves')->name('student-leaves.')->middleware('role:admin,principal,clerk,hssc_clerk,bs_clerk,hssc_admin,bs_admin,super_admin')->group(function () {
+        Route::get('/search-students', [\App\Http\Controllers\StudentLeaveController::class, 'searchStudents'])->name('search-students');
+        Route::get('/', [\App\Http\Controllers\StudentLeaveController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\StudentLeaveController::class, 'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\StudentLeaveController::class, 'store'])->name('store');
+        Route::get('/{studentLeave}', [\App\Http\Controllers\StudentLeaveController::class, 'show'])->name('show');
+        Route::get('/{studentLeave}/edit', [\App\Http\Controllers\StudentLeaveController::class, 'edit'])->name('edit');
+        Route::put('/{studentLeave}', [\App\Http\Controllers\StudentLeaveController::class, 'update'])->name('update');
+        Route::delete('/{studentLeave}', [\App\Http\Controllers\StudentLeaveController::class, 'destroy'])->name('destroy');
+    });
+
 }); // End of auth middleware group
 

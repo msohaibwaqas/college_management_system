@@ -41,8 +41,18 @@
                         <tr>
                             <td>
                                 <strong>{{ $ann->title }}</strong>
-                                <div class="small text-muted text-truncate" style="max-width: 300px;">
-                                    {{ Str::limit($ann->body, 50) }}
+                                @if($ann->is_holiday)
+                                    <div class="mt-1">
+                                        @if($ann->isVacationRange())
+                                            <span class="badge bg-warning text-dark"><i class="fas fa-umbrella-beach me-1"></i> Vacation: {{ $ann->holiday_range_label }}</span>
+                                        @elseif($ann->holiday_date)
+                                            <span class="badge bg-warning text-dark"><i class="fas fa-calendar-day me-1"></i> Holiday: {{ $ann->holiday_date->format('d M Y') }}</span>
+                                        @endif
+                                        <span class="badge bg-secondary"><i class="fas fa-lock me-1"></i> Attendance Locked</span>
+                                    </div>
+                                @endif
+                                <div class="small text-muted text-truncate mt-1" style="max-width: 320px;">
+                                    {{ Str::limit($ann->body, 60) }}
                                 </div>
                             </td>
                             <td>
