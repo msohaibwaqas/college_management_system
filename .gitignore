@@ -16,6 +16,8 @@
 /public/build
 /public/hot
 /public/storage
+/public/student_pictures/*
+/public/staff_pictures/*
 /storage/*.key
 /storage/pail
 /storage/framework/views/*.php

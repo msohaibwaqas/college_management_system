@@ -97,7 +97,7 @@
                         <select name="period" id="periodInput" class="form-select">
                             @foreach($availableMonths as $m)
                                 <option value="{{ $m }}" {{ request('period', now()->format('Y-m')) === $m ? 'selected' : '' }}>
-                                    {{ \Carbon\Carbon::createFromFormat('Y-m', $m)->format('F Y') }} ({{ $m }})
+                                    {{ \Carbon\Carbon::parse($m . '-01')->format('F Y') }} ({{ $m }})
                                 </option>
                             @endforeach
                         </select>

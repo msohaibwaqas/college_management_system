@@ -370,6 +370,7 @@ $(document).ready(function() {
             subject_id: $('#subject_id').val(),
             exam_type: $('#exam_type').val(),
             exam_name: $('#exam_name').val(),
+            test_date: $('#test_date').val(),
             _token: "{{ csrf_token() }}"
         };
 
@@ -394,16 +395,24 @@ $(document).ready(function() {
                     response.students.forEach((student, index) => {
                         const existing = response.existing_results[student.id];
                         const isAbsent = existing ? (existing.is_absent == 1) : false;
+                        const isStruckOff = student.is_struck_off || (existing && existing.is_struck_off);
 
                         if (existing && index === 0 && existing.total_marks) {
                             $('#total_marks').val(existing.total_marks);
                         }
 
+                        const struckOffBadge = isStruckOff
+                            ? '<span class="badge bg-danger ms-2"><i class="fas fa-ban me-1"></i>Struck Off (Absent)</span>'
+                            : '';
+
                         const row = `
-                            <tr>
+                            <tr class="${isStruckOff ? 'table-danger bg-opacity-10' : ''}">
                                 <td class="text-center text-muted">${index + 1}</td>
                                 <td class="text-nowrap fw-bold">${student.college_roll_no || 'N/A'}</td>
-                                <td class="fw-semibold">${student.first_name} ${student.last_name || ''}</td>
+                                <td class="fw-semibold">
+                                    ${student.first_name} ${student.last_name || ''}
+                                    ${struckOffBadge}
+                                </td>
                                 <td class="text-muted">${student.father ? student.father.name : 'N/A'}</td>
                                 <td class="text-center">
                                     <div class="form-check d-flex justify-content-center m-0">
@@ -411,7 +420,7 @@ $(document).ready(function() {
                                             style="transform: scale(1.4); cursor: pointer;"
                                             name="attendance[${student.id}]" 
                                             value="1"
-                                            ${isAbsent ? 'checked' : ''}>
+                                            ${(isAbsent || isStruckOff) ? 'checked' : ''}>
                                     </div>
                                 </td>
                             </tr>
@@ -441,6 +450,7 @@ $(document).ready(function() {
             old_exam_type: originalExamType,
             old_exam_name: originalExamName,
             total_marks: $('#total_marks').val(),
+            test_date: $('#test_date').val(),
             attendance: {},
             _token: "{{ csrf_token() }}"
         };

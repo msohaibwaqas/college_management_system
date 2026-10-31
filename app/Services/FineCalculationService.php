@@ -200,7 +200,17 @@ class FineCalculationService
                     ->whereIn('admissions.status', ['active', 'admitted', 'Active', 'Admitted']);
             })
             ->where('attendances.status', 'absent')
-            ->whereRaw("DATE_FORMAT(attendances.attendance_date, '%Y-%m') = ?", [$period]);
+            ->whereRaw("DATE_FORMAT(attendances.attendance_date, '%Y-%m') = ?", [$period])
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('student_struck_off_logs')
+                    ->whereColumn('student_struck_off_logs.student_id', 'attendances.student_id')
+                    ->whereRaw('DATE(student_struck_off_logs.struck_off_at) <= attendances.attendance_date')
+                    ->where(function ($sub) {
+                        $sub->whereNull('student_struck_off_logs.readmitted_at')
+                            ->orWhereRaw('DATE(student_struck_off_logs.readmitted_at) > attendances.attendance_date');
+                    });
+            });
 
         if ($classLevel && in_array($classLevel, ['11', '12'])) {
             $query->where('admissions.current_class', $classLevel);
@@ -269,7 +279,7 @@ class FineCalculationService
             ->join('subjects', 'results.subject_id', '=', 'subjects.id')
             ->join('admissions', function ($join) {
                 $join->on('students.id', '=', 'admissions.student_id')
-                    ->whereIn('admissions.status', ['active', 'admitted', 'Active', 'Admitted']);
+                    ->whereNotIn('admissions.status', ['Graduated', 'graduated']);
             })
             ->where('results.is_absent', 1)
             ->whereNull('results.deleted_at');
@@ -377,7 +387,7 @@ class FineCalculationService
             ->join('subjects', 'results.subject_id', '=', 'subjects.id')
             ->join('admissions', function ($join) {
                 $join->on('students.id', '=', 'admissions.student_id')
-                    ->whereIn('admissions.status', ['active', 'admitted', 'Active', 'Admitted']);
+                    ->whereNotIn('admissions.status', ['Graduated', 'graduated']);
             })
             ->where('results.is_absent', 0)
             ->whereNotNull('results.obtained_theory')

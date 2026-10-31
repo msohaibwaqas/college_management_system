@@ -92,7 +92,7 @@
                         @foreach($availableMonths as $m)
                             @php
                                 try {
-                                    $mLabel = \Carbon\Carbon::createFromFormat('Y-m', $m)->format('F Y');
+                                    $mLabel = \Carbon\Carbon::parse($m . '-01')->format('F Y');
                                 } catch (\Exception $e) {
                                     $mLabel = $m;
                                 }
@@ -131,7 +131,7 @@
                     @php
                         $activeSubject = $subjectsForYear->firstWhere('subject_id', $selectedSubjectId);
                         try {
-                            $formattedMonth = \Carbon\Carbon::createFromFormat('Y-m', $selectedMonth)->format('F Y');
+                            $formattedMonth = \Carbon\Carbon::parse($selectedMonth . '-01')->format('F Y');
                         } catch (\Exception $e) {
                             $formattedMonth = $selectedMonth;
                         }

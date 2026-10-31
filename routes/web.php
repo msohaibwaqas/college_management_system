@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SectionController;
+use App\Http\Controllers\HodManagementController;
 
 use App\Http\Controllers\LookupController;
 use App\Http\Controllers\DashboardController;
@@ -177,9 +178,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{application}/admit-late', [AdmissionApplicationController::class, 'admitLate'])->name('admission-applications.admit-late');
     });
 
-    // Staff Management
-    Route::prefix('staff')->middleware('role:admin,principal,super_admin,clerk,hssc_clerk,hssc_admin')->group(function () {
-        Route::get('/panel', [StaffController::class, 'staffPanel'])->name('staff.panel');
+    // Staff Management — Student Assignment & Award Lists (Admins, Clerks, and HODs)
+    Route::prefix('staff')->middleware('role:admin,principal,super_admin,clerk,hssc_clerk,hssc_admin,hod')->group(function () {
         Route::get('/student-assignment', [StaffController::class, 'studentAssignment'])->name('staff.student_assignment');
         Route::get('/get-sections-by-year', [StaffController::class, 'getSectionsByYear'])->name('staff.get_sections_by_year');
         Route::get('/get-subjects-by-year', [StaffController::class, 'getSubjectsByYear'])->name('staff.get_subjects_by_year');
@@ -191,6 +191,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/award-list', [StaffController::class, 'awardListForm'])->name('staff.award_list.form');
         Route::post('/award-list/generate', [StaffController::class, 'generateAwardList'])->name('staff.award_list.generate');
         Route::get('/download-award-list', [StaffController::class, 'downloadAwardList'])->name('staff.download_award_list');
+    });
+
+    // Staff Records & Administration (Admins and Clerks only)
+    Route::prefix('staff')->middleware('role:admin,principal,super_admin,clerk,hssc_clerk,hssc_admin')->group(function () {
+        Route::get('/panel', [StaffController::class, 'staffPanel'])->name('staff.panel');
         Route::get('/export', [StaffController::class, 'export'])->name('staff.export');
         Route::get('/designation-bps', [StaffController::class, 'getDesignationBps'])->name('staff.designation_bps');
         Route::get('/', [StaffController::class, 'index'])->name('staff.index');
@@ -202,13 +207,21 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/{staff}', [StaffController::class, 'destroy'])->name('staff.destroy');
     });
 
-    // Student Affairs — Sections Management
-    Route::prefix('student-affairs')->name('student-affairs.')->middleware('role:admin,principal,clerk,hssc_admin,hssc_clerk')->group(function () {
+    // Student Affairs — Sections Management (Admins, Clerks, and HODs)
+    Route::prefix('student-affairs')->name('student-affairs.')->middleware('role:admin,principal,clerk,hssc_admin,hssc_clerk,hod')->group(function () {
         Route::get('/sections', [SectionController::class, 'index'])->name('sections.index');
         Route::post('/sections', [SectionController::class, 'store'])->name('sections.store');
         Route::post('/sections/clear', [SectionController::class, 'clearSection'])->name('sections.clear');
         Route::post('/sections/copy', [SectionController::class, 'copySections'])->name('sections.copy');
         Route::get('/sections/get-subjects', [SectionController::class, 'getSubjects'])->name('sections.get-subjects');
+    });
+
+    // HOD Management (Admins, Principals, Clerks)
+    Route::prefix('admin/hods')->name('admin.hods.')->middleware('role:admin,principal,super_admin,hssc_admin,clerk,hssc_clerk')->group(function () {
+        Route::get('/', [HodManagementController::class, 'index'])->name('index');
+        Route::post('/assign', [HodManagementController::class, 'assign'])->name('assign');
+        Route::post('/unassign', [HodManagementController::class, 'unassign'])->name('unassign');
+        Route::post('/auto-assign-single', [HodManagementController::class, 'autoAssignSingleTeachers'])->name('auto_assign_single');
     });
 
     // Test Attendance
@@ -327,7 +340,7 @@ Route::middleware(['auth'])->group(function () {
             Route::post('/reports', [AttendanceReportController::class, 'generate'])->name('attendance.reports.generate');
         });
 
-        Route::middleware(['role:admin,super_admin,principal,hssc_admin'])->group(function () {
+        Route::middleware(['role:admin,super_admin,principal,hssc_admin,clerk,hssc_clerk,bs_clerk'])->group(function () {
             Route::get('/reports/teacher-status', [AttendanceReportController::class, 'teacherStatus'])->name('reports.teacher_attendance_status');
             Route::post('/reports/teacher-status/send-reminders', [AttendanceReportController::class, 'sendReminders'])->name('attendance.reports.send_reminders');
             Route::get('/reports/teacher-workload', [AttendanceReportController::class, 'teacherWorkload'])->name('reports.teacher_workload');

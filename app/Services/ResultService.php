@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Attendance;
 use App\Models\Result;
 use App\Models\Student;
 use App\Models\Subject;
@@ -362,7 +363,8 @@ class ResultService
         string $examType,
         ?string $examName = null,
         ?\App\Models\Staff $staff = null,
-        bool $isTeacher = false
+        bool $isTeacher = false,
+        ?string $testDate = null
     ): array {
         $subject = Subject::findOrFail($subjectId);
 
@@ -388,10 +390,39 @@ class ResultService
                         ->from('student_compulsory_subjects')
                         ->whereColumn('student_compulsory_subjects.student_id', 'students.id');
                 });
-            })->whereIn('admissions.status', ['Admitted', 'Active']);
+            });
         }
 
+        $resolvedDate = $testDate ?: \App\Models\Datesheet::where('subject_id', $subjectId)
+            ->where('admission_year', $year)
+            ->where(function ($q) use ($examName) {
+                if ($examName) {
+                    $q->where('exam_name', $examName);
+                }
+            })
+            ->value('test_date')?->format('Y-m-d');
+
+        $studentsQuery->whereNotIn('admissions.status', ['Graduated', 'graduated']);
+
         $students = $studentsQuery->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED)')->get();
+
+        // Identify students who were struck off on this test date
+        $struckOffStudentIds = [];
+        if ($resolvedDate) {
+            $struckOffStudentIds = DB::table('student_struck_off_logs')
+                ->whereIn('student_id', $students->pluck('id'))
+                ->whereDate('struck_off_at', '<=', $resolvedDate)
+                ->where(function ($sub) use ($resolvedDate) {
+                    $sub->whereNull('readmitted_at')
+                        ->orWhereDate('readmitted_at', '>', $resolvedDate);
+                })
+                ->pluck('student_id')
+                ->toArray();
+        }
+
+        foreach ($students as $st) {
+            $st->is_struck_off = in_array($st->id, $struckOffStudentIds);
+        }
 
         $existingResults = Result::where('academic_year', $year)
             ->where('class_level', $classLevel)
@@ -401,10 +432,45 @@ class ResultService
             ->get()
             ->keyBy('student_id');
 
+        // If a test date is provided, check lecture attendances for any student missing from results
+        $lectureAttendances = collect();
+        if ($testDate) {
+            $lectureAttendances = Attendance::where('subject_id', $subjectId)
+                ->whereDate('attendance_date', $testDate)
+                ->whereIn('student_id', $students->pluck('id'))
+                ->get()
+                ->keyBy('student_id');
+        }
+
+        foreach ($students as $student) {
+            if (in_array($student->id, $struckOffStudentIds)) {
+                $existing = $existingResults->get($student->id);
+                $existingResults->put($student->id, (object) [
+                    'student_id'         => $student->id,
+                    'is_absent'          => 1,
+                    'obtained_theory'    => 0,
+                    'obtained_practical' => 0,
+                    'total_marks'        => $existing?->total_marks ?? null,
+                    'is_struck_off'      => true,
+                ]);
+            } elseif (!$existingResults->has($student->id) && $lectureAttendances->has($student->id)) {
+                $att = $lectureAttendances->get($student->id);
+                $isAbsent = in_array($att->status, ['absent', 'leave']);
+                $existingResults->put($student->id, (object) [
+                    'student_id'         => $student->id,
+                    'is_absent'          => $isAbsent ? 1 : 0,
+                    'obtained_theory'    => $isAbsent ? 0 : null,
+                    'obtained_practical' => $isAbsent ? 0 : null,
+                    'total_marks'        => null,
+                    'is_struck_off'      => false,
+                ]);
+            }
+        }
+
         return [
-            'students' => $students,
+            'students'         => $students,
             'existing_results' => $existingResults,
-            'subject' => $subject,
+            'subject'          => $subject,
         ];
     }
 

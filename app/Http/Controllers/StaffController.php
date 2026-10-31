@@ -7,8 +7,10 @@ use App\Models\Subject;
 use App\Models\BloodGroup;
 use App\Models\Designation;
 use App\Models\BsSubject;
+use App\Models\Admissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Services\FileUploadService;
 use App\Services\StaffAssignmentService;
 use App\Http\Requests\Staff\StoreStaffRequest;
@@ -166,11 +168,47 @@ class StaffController extends Controller
     }
 
     /**
+     * Validate that the current user (if operating in HOD role) has authority over the given subject, staff member, and batch.
+     */
+    protected function authorizeHodSubjectAndTeacher($subjectId, $staffId = null, $admissionYear = null): void
+    {
+        $user = Auth::user();
+        if ($user && $user->isHod()) {
+            $hodSubjectIds = $user->getHodSubjectIds();
+            if (!in_array((int) $subjectId, $hodSubjectIds)) {
+                abort(403, 'Unauthorized access. You are not the HOD for this subject.');
+            }
+
+            if ($staffId !== null) {
+                $isSubjectTeacher = DB::table('staff_subject_specializations')
+                    ->where('subject_id', (int) $subjectId)
+                    ->where('staff_id', (int) $staffId)
+                    ->exists();
+
+                if (!$isSubjectTeacher) {
+                    abort(403, 'Unauthorized access. Teacher does not belong to this subject department.');
+                }
+            }
+
+            if ($admissionYear !== null) {
+                $hasActive = Admissions::where('admission_year', (int) $admissionYear)
+                    ->where('status', '!=', 'Graduated')
+                    ->exists();
+                if (!$hasActive) {
+                    abort(403, 'Unauthorized access. HOD cannot manage assignments for Graduated batches.');
+                }
+            }
+        }
+    }
+
+    /**
      * Student assignment management page
      */
     public function studentAssignment(Request $request)
     {
-        $admissionYears = $this->staffAssignmentService->getAdmissionYears();
+        $user = Auth::user();
+        $isHod = ($user && $user->isHod());
+        $admissionYears = $this->staffAssignmentService->getAdmissionYears($isHod);
         return view('staff.student_assignment', compact('admissionYears'));
     }
 
@@ -179,7 +217,10 @@ class StaffController extends Controller
      */
     public function getSubjectsByYear(Request $request)
     {
-        $subjects = $this->staffAssignmentService->getSubjectsByYear($request->admission_year);
+        $user = Auth::user();
+        $isHod = ($user && $user->isHod());
+        $hodStaffId = $isHod ? $user->staff_id : null;
+        $subjects = $this->staffAssignmentService->getSubjectsByYear($request->admission_year, $hodStaffId, $isHod);
         return response()->json($subjects);
     }
 
@@ -188,6 +229,7 @@ class StaffController extends Controller
      */
     public function getTeachersBySubject(Request $request)
     {
+        $this->authorizeHodSubjectAndTeacher($request->subject_id);
         $teachers = $this->staffAssignmentService->getTeachersBySubject($request->subject_id);
         return response()->json($teachers);
     }
@@ -197,9 +239,13 @@ class StaffController extends Controller
      */
     public function getSectionsByYear(Request $request)
     {
+        $user = Auth::user();
+        $isHod = ($user && $user->isHod());
+        $this->authorizeHodSubjectAndTeacher($request->subject_id, null, $request->admission_year);
         $sections = $this->staffAssignmentService->getSectionsByYear(
             $request->admission_year,
-            $request->subject_id
+            $request->subject_id,
+            $isHod
         );
         return response()->json($sections);
     }
@@ -213,9 +259,14 @@ class StaffController extends Controller
             return response()->json(['html' => '']);
         }
 
+        $user = Auth::user();
+        $isHod = ($user && $user->isHod());
+        $this->authorizeHodSubjectAndTeacher($request->subject_id, null, $request->admission_year);
+
         $students = $this->staffAssignmentService->getUnassignedStudents(
             $request->admission_year,
-            $request->subject_id
+            $request->subject_id,
+            $isHod
         );
 
         $html = view('staff.partials.unassigned_list', compact('students'))->render();
@@ -231,10 +282,15 @@ class StaffController extends Controller
             return response()->json(['html' => '']);
         }
 
+        $user = Auth::user();
+        $isHod = ($user && $user->isHod());
+        $this->authorizeHodSubjectAndTeacher($request->subject_id, $request->staff_id, $request->admission_year);
+
         $students = $this->staffAssignmentService->getAssignedStudents(
             $request->admission_year,
             $request->subject_id,
-            $request->staff_id
+            $request->staff_id,
+            $isHod
         );
 
         $html = view('staff.partials.assigned_list', compact('students'))->render();
@@ -246,6 +302,25 @@ class StaffController extends Controller
      */
     public function assignStudents(Request $request)
     {
+        $this->authorizeHodSubjectAndTeacher($request->subject_id, $request->staff_id);
+
+        $user = Auth::user();
+        if ($user && $user->isHod()) {
+            $studentIds = $request->student_ids ?? [];
+            if (!empty($studentIds)) {
+                $hasGraduated = Admissions::whereIn('student_id', $studentIds)
+                    ->where('status', 'Graduated')
+                    ->exists();
+
+                if ($hasGraduated) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'HOD cannot assign Graduated students to teachers.'
+                    ], 403);
+                }
+            }
+        }
+
         $this->staffAssignmentService->assignStudents(
             $request->student_ids ?? [],
             $request->staff_id,
@@ -262,6 +337,25 @@ class StaffController extends Controller
      */
     public function unassignStudents(Request $request)
     {
+        $this->authorizeHodSubjectAndTeacher($request->subject_id, $request->staff_id);
+
+        $user = Auth::user();
+        if ($user && $user->isHod()) {
+            $studentIds = $request->student_ids ?? [];
+            if (!empty($studentIds)) {
+                $hasGraduated = Admissions::whereIn('student_id', $studentIds)
+                    ->where('status', 'Graduated')
+                    ->exists();
+
+                if ($hasGraduated) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'HOD cannot unassign Graduated students.'
+                    ], 403);
+                }
+            }
+        }
+
         $this->staffAssignmentService->unassignStudents(
             $request->student_ids ?? [],
             $request->staff_id,

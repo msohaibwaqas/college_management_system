@@ -54,10 +54,20 @@
 @section('content')
 <div class="container-fluid">
     <div class="row mb-4">
-        <div class="col-12">
-            <h2><i class="fas fa-user-plus me-2"></i>Assign Students to Teachers</h2>
+        <div class="col-12 d-flex align-items-center gap-2">
+            <h2 class="mb-0"><i class="fas fa-user-plus me-2"></i>Assign Students to Teachers</h2>
+            @if(Auth::user()->isHod())
+                <span class="badge bg-primary fs-6"><i class="fas fa-user-tie me-1"></i>HOD Department View</span>
+            @endif
         </div>
     </div>
+
+    @if(Auth::user()->isHod() && empty(Auth::user()->getHodSubjectIds()))
+        <div class="alert alert-warning d-flex align-items-center gap-2 mb-4">
+            <i class="fas fa-exclamation-triangle fa-lg"></i>
+            <span>You are logged in as HOD, but no subject department has been assigned to your staff profile yet. Please contact the administrator.</span>
+        </div>
+    @endif
 
     <!-- Filters -->
     <div class="card mb-4">
@@ -185,6 +195,10 @@ $(document).ready(function() {
                 subjects.forEach(s => options += `<option value="${s.id}">${s.name}</option>`);
                 $('#subject_id').html(options).prop('disabled', false);
                 $('#subject_container').fadeIn();
+
+                if (subjects.length === 1) {
+                    $('#subject_id').val(subjects[0].id).trigger('change');
+                }
             });
         }
     });
@@ -203,6 +217,11 @@ $(document).ready(function() {
                 teachers.forEach(t => options += `<option value="${t.id}">${t.first_name} ${t.last_name || ''}</option>`);
                 $('#staff_id').html(options).prop('disabled', false);
                 $('#staff_container').fadeIn();
+
+                if (teachers.length === 1) {
+                    $('#staff_id').val(teachers[0].id).trigger('change');
+                    $('#loadStudentsBtn').trigger('click');
+                }
             });
         }
     });

@@ -6,6 +6,8 @@ use App\Actions\Attendance\MarkAttendanceAction;
 use App\Exceptions\AttendanceRestrictedException;
 use App\Http\Requests\Attendance\MarkAttendanceRequest;
 use App\Models\Attendance;
+use App\Models\Datesheet;
+use App\Models\Result;
 use App\Models\Subject;
 use App\Services\AcademicCalendarService;
 use App\Services\AttendanceCalculatorService;
@@ -69,6 +71,35 @@ class AttendanceController extends Controller
             ->orderBy('admissions.admission_year', 'desc')
             ->get();
 
+        $todayDayOfWeek = now()->format('l');
+
+        // Fetch active timetable entries for this staff member
+        $staffTimetables = DB::table('timetable_entries')
+            ->where('staff_id', $staff->id)
+            ->where('is_active', 1)
+            ->select('subject_id', 'admission_year', 'section', 'day_of_week')
+            ->get();
+
+        $myClasses->transform(function ($class) use ($staffTimetables, $todayDayOfWeek) {
+            $subjectTt = $staffTimetables->where('subject_id', $class->subject_id)
+                ->where('admission_year', $class->admission_year);
+
+            if ($subjectTt->isEmpty()) {
+                $class->has_timetable = false;
+                $class->is_scheduled_today = true;
+                $class->scheduled_today_sections = collect();
+                $class->scheduled_days = collect();
+            } else {
+                $class->has_timetable = true;
+                $scheduledToday = $subjectTt->where('day_of_week', $todayDayOfWeek);
+                $class->is_scheduled_today = $scheduledToday->isNotEmpty();
+                $class->scheduled_today_sections = $scheduledToday->pluck('section')->filter()->unique()->values();
+                $class->scheduled_days = $subjectTt->pluck('day_of_week')->unique()->values();
+            }
+
+            return $class;
+        });
+
         return view('attendance.index', compact('myClasses', 'isTodayOff', 'todayOffReason'));
     }
 
@@ -92,6 +123,28 @@ class AttendanceController extends Controller
 
         if (!$subjectId || !$class || !$year) {
             return redirect()->route('attendance.index')->with('error', 'Invalid parameters.');
+        }
+
+        $dayOfWeek = \Carbon\Carbon::parse($date)->format('l');
+
+        // Look up sections scheduled for this teacher, subject, year, and day
+        $todayTtSections = DB::table('timetable_entries')
+            ->where('staff_id', $staff->id)
+            ->where('subject_id', $subjectId)
+            ->where('admission_year', $year)
+            ->where('is_active', 1)
+            ->where('day_of_week', $dayOfWeek)
+            ->pluck('section')
+            ->filter()
+            ->map(fn($s) => trim($s))
+            ->unique()
+            ->values();
+
+        // If timetable has section-specific entries today and no section was explicitly chosen, auto-select today's section
+        if (empty($section) && $todayTtSections->isNotEmpty()) {
+            if ($todayTtSections->count() === 1) {
+                $section = $todayTtSections->first();
+            }
         }
 
         // Validate teacher date, day, and time restrictions
@@ -126,6 +179,16 @@ class AttendanceController extends Controller
             ->where('admissions.admission_year', $year)
             ->whereIn('admissions.status', ['active', 'admitted', 'Active', 'Admitted'])
             ->whereNotIn('admissions.status', ['Struck Off', 'struck_off'])
+            ->whereNotExists(function ($query) use ($date) {
+                $query->select(DB::raw(1))
+                    ->from('student_struck_off_logs')
+                    ->whereColumn('student_struck_off_logs.student_id', 'students.id')
+                    ->whereDate('student_struck_off_logs.struck_off_at', '<=', $date)
+                    ->where(function ($sub) use ($date) {
+                        $sub->whereNull('student_struck_off_logs.readmitted_at')
+                            ->orWhereDate('student_struck_off_logs.readmitted_at', '>', $date);
+                    });
+            })
             ->whereNull('student_teacher_subjects.deleted_at')
             ->whereNull('students.deleted_at')
             ->whereNull('admissions.deleted_at')
@@ -148,6 +211,10 @@ class AttendanceController extends Controller
             } else {
                 $studentsQuery->where('student_subject_sections.section', $section);
             }
+        } elseif ($todayTtSections->isNotEmpty()) {
+            // When timetable defines sections for today and no single section was selected,
+            // strictly load only students belonging to sections scheduled today
+            $studentsQuery->whereIn('student_subject_sections.section', $todayTtSections);
         }
         
         $students = $studentsQuery->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED) ASC')->get();
@@ -195,7 +262,37 @@ class AttendanceController extends Controller
             ->get()
             ->keyBy('student_id');
 
-        return view('attendance.create', compact('students', 'subject', 'class', 'year', 'date', 'existingAttendance', 'availableSections', 'section', 'activeLeaves'));
+        // Check if a test is scheduled on this date for this subject and admission year
+        $scheduledTest = Datesheet::where('subject_id', $subjectId)
+            ->where('admission_year', $year)
+            ->whereDate('test_date', $date)
+            ->first();
+
+        $existingTestMarks = null;
+        if ($scheduledTest) {
+            $existingTestMarks = Result::where('academic_year', $year)
+                ->where('class_level', $class)
+                ->where('subject_id', $subjectId)
+                ->where('exam_name', $scheduledTest->exam_name)
+                ->where(function ($q) use ($user) {
+                    $q->where('created_by', $user->id)
+                      ->orWhere('updated_by', $user->id);
+                })
+                ->whereNotNull('total_marks')
+                ->value('total_marks')
+                ?? Result::where('academic_year', $year)
+                ->where('class_level', $class)
+                ->where('subject_id', $subjectId)
+                ->where('exam_name', $scheduledTest->exam_name)
+                ->whereNotNull('total_marks')
+                ->value('total_marks');
+        }
+
+        return view('attendance.create', compact(
+            'students', 'subject', 'class', 'year', 'date', 
+            'existingAttendance', 'availableSections', 'section', 
+            'activeLeaves', 'scheduledTest', 'existingTestMarks', 'todayTtSections'
+        ));
     }
 
     public function store(MarkAttendanceRequest $request)

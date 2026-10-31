@@ -28,8 +28,11 @@
                         <select name="section" id="section" class="form-select">
                             <option value="">All Students ({{ count($students) + (isset($section) && $section ? \App\Models\StudentTeacherSubject::where('staff_id', auth()->user()->staff_id)->where('subject_id', $subject->id)->where('class_level', $class)->where('academic_year', $year)->count() - count($students) : 0) }})</option>
                             @foreach($availableSections as $sec)
+                                @php
+                                    $isSecToday = isset($todayTtSections) && $todayTtSections->isNotEmpty() && $todayTtSections->contains($sec);
+                                @endphp
                                 <option value="{{ $sec }}" {{ isset($section) && $section == $sec ? 'selected' : '' }}>
-                                    Section {{ $sec }}
+                                    Section {{ $sec }}{{ $isSecToday ? ' (Scheduled Today)' : '' }}
                                 </option>
                             @endforeach
                             <option value="unassigned" {{ isset($section) && $section == 'unassigned' ? 'selected' : '' }}>
@@ -52,6 +55,53 @@
                 <input type="hidden" name="year" value="{{ $year }}">
                 @if(isset($section) && $section)
                     <input type="hidden" name="section" value="{{ $section }}">
+                @endif
+
+                @if(isset($scheduledTest) && $scheduledTest)
+                    <div class="card border-0 shadow-sm mb-4" style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-left: 5px solid #2563eb !important;">
+                        <div class="card-body p-3">
+                            <div class="row align-items-center">
+                                <div class="col-lg-7 mb-3 mb-lg-0">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span class="badge bg-primary px-2.5 py-1.5 me-2" style="font-size: 0.8rem;">
+                                            <i class="fas fa-file-signature me-1"></i> Scheduled Test
+                                        </span>
+                                        <h5 class="mb-0 fw-bold text-dark">{{ $scheduledTest->exam_name }}</h5>
+                                    </div>
+                                    <p class="mb-0 text-muted small">
+                                        A test is scheduled for <strong>{{ $subject->name }}</strong> on {{ \Carbon\Carbon::parse($date)->format('l, d M Y') }}.
+                                        Marking attendance will automatically sync to <strong>Test Attendance &amp; Results</strong>:
+                                        absent/leave students are recorded as absent (0 marks), and present students remain empty ready for entering obtained marks.
+                                    </p>
+                                </div>
+                                <div class="col-lg-5">
+                                    <div class="bg-white p-3 rounded-3 border shadow-sm">
+                                        <label for="test_total_marks" class="form-label fw-bold text-dark small mb-1 d-flex justify-content-between align-items-center">
+                                            <span><i class="fas fa-award text-warning me-1"></i> Test Total Marks <span class="text-danger">*</span></span>
+                                            <span class="badge bg-light text-secondary border">Teacher Specific</span>
+                                        </label>
+                                        <div class="input-group">
+                                            <span class="input-group-text bg-light text-muted fw-bold">Max Marks</span>
+                                            <input type="number" 
+                                                   name="test_total_marks" 
+                                                   id="test_total_marks" 
+                                                   class="form-control form-control-lg fw-bold text-primary" 
+                                                   min="1" 
+                                                   max="500" 
+                                                   value="{{ old('test_total_marks', $existingTestMarks ?? 25) }}" 
+                                                   placeholder="e.g. 25, 30, 50" 
+                                                   required>
+                                        </div>
+                                        <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                                            Enter the total marks prepared for this test (e.g. 25, 30, 50).
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="datesheet_id" value="{{ $scheduledTest->id }}">
+                    <input type="hidden" name="exam_name" value="{{ $scheduledTest->exam_name }}">
                 @endif
 
                 @if(isset($activeLeaves) && $activeLeaves->isNotEmpty())

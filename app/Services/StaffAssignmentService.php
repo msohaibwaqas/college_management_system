@@ -19,12 +19,17 @@ class StaffAssignmentService
     /**
      * Get distinct admission years for dropdowns.
      */
-    public function getAdmissionYears(): Collection
+    public function getAdmissionYears(bool $excludeGraduated = false): Collection
     {
-        return Admissions::select('admission_year')
+        $query = Admissions::select('admission_year')
             ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
+            ->orderByDesc('admission_year');
+
+        if ($excludeGraduated) {
+            $query->where('status', '!=', 'Graduated');
+        }
+
+        return $query->pluck('admission_year');
     }
 
     /**
@@ -87,22 +92,32 @@ class StaffAssignmentService
     /**
      * Get subjects that have enrolled students in a specific admission year.
      */
-    public function getSubjectsByYear($year): Collection
+    public function getSubjectsByYear($year, ?int $hodStaffId = null, bool $excludeGraduated = false): Collection
     {
         if (!$year) {
             return collect();
         }
 
-        return Subject::where(function ($query) use ($year) {
-            $query->whereHas('studentElectives.student.admissions', function ($q) use ($year) {
+        $query = Subject::where(function ($query) use ($year, $excludeGraduated) {
+            $query->whereHas('studentElectives.student.admissions', function ($q) use ($year, $excludeGraduated) {
                 $q->where('admission_year', $year);
+                if ($excludeGraduated) {
+                    $q->where('status', '!=', 'Graduated');
+                }
             })
-            ->orWhereHas('studentCompulsorySubjects.student.admissions', function ($q) use ($year) {
+            ->orWhereHas('studentCompulsorySubjects.student.admissions', function ($q) use ($year, $excludeGraduated) {
                 $q->where('admission_year', $year);
+                if ($excludeGraduated) {
+                    $q->where('status', '!=', 'Graduated');
+                }
             });
-        })
-        ->orderBy('name', 'asc')
-        ->get(['id', 'name']);
+        });
+
+        if ($hodStaffId) {
+            $query->where('hod_staff_id', $hodStaffId);
+        }
+
+        return $query->orderBy('name', 'asc')->get(['id', 'name']);
     }
 
     /**
@@ -126,15 +141,22 @@ class StaffAssignmentService
     /**
      * Get subject sections for a specific admission year and subject.
      */
-    public function getSectionsByYear($year, $subjectId): Collection
+    public function getSectionsByYear($year, $subjectId, bool $excludeGraduated = false): Collection
     {
         if (!$year || !$subjectId) {
             return collect();
         }
 
-        return StudentSubjectSection::where('admission_year', $year)
-            ->where('subject_id', $subjectId)
-            ->select('section')
+        $query = StudentSubjectSection::where('admission_year', $year)
+            ->where('subject_id', $subjectId);
+
+        if ($excludeGraduated) {
+            $query->whereHas('student.admissions', function ($q) use ($year) {
+                $q->where('admission_year', $year)->where('status', '!=', 'Graduated');
+            });
+        }
+
+        return $query->select('section')
             ->selectRaw('COUNT(*) as student_count')
             ->selectRaw('GROUP_CONCAT(student_id ORDER BY student_id) as student_ids_csv')
             ->groupBy('section')
@@ -152,13 +174,13 @@ class StaffAssignmentService
     /**
      * Get unassigned students for a subject in an admission year.
      */
-    public function getUnassignedStudents($year, $subjectId): Collection
+    public function getUnassignedStudents($year, $subjectId, bool $excludeGraduated = false): Collection
     {
         if (!$year || !$subjectId) {
             return collect();
         }
 
-        return Student::with([
+        $query = Student::with([
                 'admissions',
                 'father',
                 'subjectSections' => function ($q) use ($subjectId, $year) {
@@ -166,8 +188,11 @@ class StaffAssignmentService
                 }
             ])
             ->join('admissions', 'students.id', '=', 'admissions.student_id')
-            ->whereHas('admissions', function ($q) use ($year) {
+            ->whereHas('admissions', function ($q) use ($year, $excludeGraduated) {
                 $q->where('admission_year', $year);
+                if ($excludeGraduated) {
+                    $q->where('status', '!=', 'Graduated');
+                }
             })
             ->where(function ($query) use ($subjectId) {
                 $query->whereHas('electives', function ($q) use ($subjectId) {
@@ -179,8 +204,13 @@ class StaffAssignmentService
             })
             ->whereDoesntHave('studentTeacherSubjects', function ($q) use ($subjectId) {
                 $q->where('subject_id', $subjectId);
-            })
-            ->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED)')
+            });
+
+        if ($excludeGraduated) {
+            $query->where('admissions.status', '!=', 'Graduated');
+        }
+
+        return $query->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED)')
             ->select('students.*')
             ->get();
     }
@@ -188,13 +218,13 @@ class StaffAssignmentService
     /**
      * Get assigned students for a specific teacher and subject in an admission year.
      */
-    public function getAssignedStudents($year, $subjectId, $staffId): Collection
+    public function getAssignedStudents($year, $subjectId, $staffId, bool $excludeGraduated = false): Collection
     {
         if (!$year || !$subjectId || !$staffId) {
             return collect();
         }
 
-        return Student::with([
+        $query = Student::with([
                 'admissions',
                 'father',
                 'subjectSections' => function ($q) use ($subjectId, $year) {
@@ -202,14 +232,22 @@ class StaffAssignmentService
                 }
             ])
             ->join('admissions', 'students.id', '=', 'admissions.student_id')
-            ->whereHas('admissions', function ($q) use ($year) {
+            ->whereHas('admissions', function ($q) use ($year, $excludeGraduated) {
                 $q->where('admission_year', $year);
+                if ($excludeGraduated) {
+                    $q->where('status', '!=', 'Graduated');
+                }
             })
             ->whereHas('studentTeacherSubjects', function ($q) use ($subjectId, $staffId) {
                 $q->where('subject_id', $subjectId)
                   ->where('staff_id', $staffId);
-            })
-            ->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED)')
+            });
+
+        if ($excludeGraduated) {
+            $query->where('admissions.status', '!=', 'Graduated');
+        }
+
+        return $query->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED)')
             ->select('students.*')
             ->get();
     }

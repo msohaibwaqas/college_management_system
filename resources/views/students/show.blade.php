@@ -76,7 +76,14 @@
                 </div>
                 <div class="card-body">
                     <div class="text-center mb-4">
-                        <img src="{{ $student->getProfilePictureUrl() }}" alt="Student Photo" class="img-thumbnail rounded-circle" style="width: 150px; height: 150px; object-fit: cover;">
+                        <img src="{{ $student->getProfilePictureUrl() }}" alt="Student Photo" class="img-thumbnail rounded-circle shadow-sm" style="width: 150px; height: 150px; object-fit: cover;">
+                        @if($activeRole != 'teacher')
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3" data-bs-toggle="modal" data-bs-target="#uploadPictureModal">
+                                    <i class="fas fa-camera me-1"></i> Update Photo
+                                </button>
+                            </div>
+                        @endif
                     </div>
                     <table class="table table-sm">
                         <tr>
@@ -698,6 +705,52 @@
 </div>
 @endif
 
+@if($activeRole != 'teacher')
+<div class="modal fade" id="uploadPictureModal" tabindex="-1" aria-labelledby="uploadPictureModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form action="{{ route('students.upload_picture', $student->id) }}" method="POST" enctype="multipart/form-data">
+                @csrf
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadPictureModalLabel">
+                        <i class="fas fa-camera me-2 text-primary"></i>Update Student Photo
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div class="mb-3">
+                        <img id="picturePreview" src="{{ $student->getProfilePictureUrl() }}" alt="Preview" class="img-thumbnail rounded-circle mb-2 shadow-sm" style="width: 140px; height: 140px; object-fit: cover;">
+                    </div>
+                    <div class="mb-3 text-start">
+                        <label for="pictureInput" class="form-label fw-bold">Select New Photo <span class="text-danger">*</span></label>
+                        <input type="file" class="form-control" id="pictureInput" name="picture" accept="image/jpeg,image/png,image/jpg,image/webp" required onchange="previewStudentPhoto(this)">
+                        <div class="form-text small">Accepted formats: JPG, PNG, WebP (Max 2MB).</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-cloud-upload-alt me-1"></i> Upload Photo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function previewStudentPhoto(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('picturePreview');
+            if (preview) preview.src = e.target.result;
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
+@endif
+
 @endsection
 
 @section('scripts')
@@ -726,3 +779,4 @@
 </script>
 @endif
 @endsection
+

@@ -151,6 +151,11 @@ class Staff extends Model
         return $this->hasMany(StaffSubjectSpecialization::class, 'staff_id', 'id');
     }
 
+    public function hodSubjects(): HasMany
+    {
+        return $this->hasMany(Subject::class, 'hod_staff_id', 'id');
+    }
+
     public function studentTeacherSubjects(): HasMany
     {
         return $this->hasMany(StudentTeacherSubject::class, 'staff_id', 'id');

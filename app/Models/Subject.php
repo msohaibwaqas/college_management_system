@@ -48,6 +48,7 @@ class Subject extends Model
         'total_11',
         'theory_12',
         'practical_12',
+        'hod_staff_id',
         'created_by',
         'updated_by',
         'deleted_by',
@@ -118,6 +119,11 @@ class Subject extends Model
     public function staffSubjectSpecializations(): HasMany
     {
         return $this->hasMany(StaffSubjectSpecialization::class, 'subject_id', 'id');
+    }
+
+    public function hod(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class, 'hod_staff_id', 'id');
     }
 
     // Scopes

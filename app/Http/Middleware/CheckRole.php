@@ -27,6 +27,14 @@ class CheckRole
             if (in_array($activeRole, $roles)) {
                 return $next($request);
             }
+            // An HOD is inherently a teacher with teaching responsibilities
+            if ($activeRole === 'hod' && in_array('teacher', $roles)) {
+                return $next($request);
+            }
+            // A teacher who is an HOD can access HOD routes
+            if ($activeRole === 'teacher' && in_array('hod', $roles) && $user->hasRole('hod')) {
+                return $next($request);
+            }
             // If active role is set but not allowed, deny access.
             // This strictly enforces the switched role's permissions.
             abort(403, 'Unauthorized access. You do not have the required role.');

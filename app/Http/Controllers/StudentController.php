@@ -498,4 +498,33 @@ class StudentController extends Controller
             return back()->with('error', 'Failed to confirm payment: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Upload or replace student profile picture directly.
+     */
+    public function uploadPicture(Request $request, Student $student)
+    {
+        if (Auth::user()?->isTeacher()) {
+            return redirect()->back()->with('error', 'Access denied.');
+        }
+
+        $request->validate([
+            'picture' => 'required|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ]);
+
+        try {
+            $picturePath = $this->fileUploadService->update(
+                $request->file('picture'),
+                $student->picture,
+                'student_pictures'
+            );
+
+            $student->update(['picture' => $picturePath]);
+
+            return redirect()->back()->with('success', 'Student profile picture updated successfully!');
+        } catch (\Exception $e) {
+            Log::error('Student picture upload failed: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to update picture: ' . $e->getMessage());
+        }
+    }
 }

@@ -131,10 +131,11 @@ class ResultController extends Controller
     {
         $request->validate([
             'academic_year' => 'required|integer',
-            'class_level' => 'required|in:11,12',
-            'subject_id' => 'required|exists:subjects,id',
-            'exam_type' => 'required|string',
-            'exam_name' => 'nullable|string',
+            'class_level'   => 'required|in:11,12',
+            'subject_id'    => 'required|exists:subjects,id',
+            'exam_type'     => 'required|string',
+            'exam_name'     => 'nullable|string',
+            'test_date'     => 'nullable|date',
         ]);
 
         [$isTeacher, $staff] = $this->resultService->resolveTeacherContext();
@@ -150,7 +151,8 @@ class ResultController extends Controller
             $request->exam_type,
             $request->exam_name,
             $staff,
-            $isTeacher
+            $isTeacher,
+            $request->test_date
         );
 
         return response()->json($data);

@@ -29,12 +29,24 @@ class DashboardController extends Controller
             return view('dashboards.admin', $data);
         }
 
-        if ($activeRole === 'teacher') {
+        if ($activeRole === 'teacher' || $activeRole === 'hod') {
             $staff = $user->staff;
             if (!$staff) {
                 return view('dashboards.teacher', ['error' => 'No staff record linked to this user.']);
             }
             $data = $this->dashboardService->getTeacherDashboardData($staff);
+
+            // Add HOD department info if user is HOD
+            $isHod = $user->hasRole('hod') || !empty($user->getHodSubjectIds());
+            $data['isHod'] = $isHod;
+            if ($isHod) {
+                $data['hodSubjects'] = \App\Models\Subject::where('hod_staff_id', $staff->id)
+                    ->withCount(['staffSubjectSpecializations as teachers_count'])
+                    ->get();
+            } else {
+                $data['hodSubjects'] = collect();
+            }
+
             return view('dashboards.teacher', $data);
         }
 

@@ -62,6 +62,7 @@
                     if ($userRoles->contains('name', 'admin')) $activeRole = 'admin';
                     elseif ($userRoles->contains('name', 'principal')) $activeRole = 'principal';
                     elseif ($userRoles->contains('name', 'super_admin')) $activeRole = 'super_admin';
+                    elseif ($userRoles->contains('name', 'hod') || ($user && !empty($user->getHodSubjectIds()))) $activeRole = 'hod';
                     elseif ($userRoles->contains('name', 'teacher')) $activeRole = 'teacher';
                     else $activeRole = $userRoles->first()->name;
                 }
@@ -78,7 +79,7 @@
             }
             
             // For HSSC specific roles, force HSSC view
-            if (in_array($activeRole, ['hssc_clerk', 'hssc_admin', 'hssc_accountant']) && !session()->has('sidebar_view')) {
+            if (in_array($activeRole, ['hssc_clerk', 'hssc_admin', 'hssc_accountant', 'hod']) && !session()->has('sidebar_view')) {
                 $sidebarView = 'HSSC';
                 session(['sidebar_view' => 'HSSC']);
             }
@@ -139,6 +140,7 @@
                                 <li><a href="{{ route('students.create') }}" class="{{ request()->routeIs('students.create') ? 'active' : '' }}">Add New</a></li>
                                 <li><a href="{{ route('student-affairs.sections.index') }}" class="{{ request()->routeIs('student-affairs.sections.*') ? 'active' : '' }}">Sections</a></li>
                                 <li><a href="{{ route('staff.student_assignment') }}" class="{{ request()->routeIs('staff.student_assignment') ? 'active' : '' }}">Assign Students</a></li>
+                                <li><a href="{{ route('admin.hods.index') }}" class="{{ request()->routeIs('admin.hods.*') ? 'active' : '' }}"><i class="fas fa-user-tie text-primary me-1"></i> Subject HODs</a></li>
                                 <li><a href="{{ route('bise-roll-numbers.index') }}" class="{{ request()->routeIs('bise-roll-numbers.*') ? 'active' : '' }}">Add BISE Roll No.</a></li>
                                 <li>
                                     <a href="{{ route('student-leaves.index') }}" class="{{ request()->routeIs('student-leaves.*') ? 'active' : '' }}">
@@ -161,7 +163,7 @@
 
                     {{-- Staff Details --}}
                     <li>
-                        <a href="#" class="menu-toggle {{ (request()->routeIs('staff.*') && !request()->routeIs(['staff.student_assignment', 'staff.award_list.*'])) || request()->routeIs('reports.staff-attendance.*') ? 'active' : '' }}" data-target="staff-menu">
+                        <a href="#" class="menu-toggle {{ (request()->routeIs('staff.*') && !request()->routeIs(['staff.student_assignment', 'staff.award_list.*'])) || request()->routeIs('reports.staff-attendance.*') || request()->routeIs('admin.hods.*') ? 'active' : '' }}" data-target="staff-menu">
                             <i class="fas fa-user-tie"></i>
                             <span>Staff Details</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -170,6 +172,7 @@
                             <li><a href="{{ route('staff.index') }}" class="{{ request()->routeIs('staff.index') ? 'active' : '' }}">All Staff</a></li>
                             @if($activeRole != 'teacher')
                                 <li><a href="{{ route('staff.create') }}" class="{{ request()->routeIs('staff.create') ? 'active' : '' }}">Add New</a></li>
+                                <li><a href="{{ route('admin.hods.index') }}" class="{{ request()->routeIs('admin.hods.*') ? 'active' : '' }}"><i class="fas fa-user-tie text-primary me-1"></i> Subject HODs</a></li>
                                 <li><a href="{{ route('reports.staff-attendance.index') }}" class="{{ request()->routeIs('reports.staff-attendance.*') ? 'active' : '' }}">Attendance Reports</a></li>
                             @endif
                             @if(in_array($activeRole, ['admin', 'principal', 'super_admin']) || (isset($user) && $user->is_super_admin))
@@ -258,7 +261,7 @@
                             <li><a href="{{ route('reports.subject-final-result-report.index') }}" class="{{ request()->routeIs('reports.subject-final-result-report.*') ? 'active' : '' }}">Subject Final Result Report</a></li>
                             <li><a href="{{ route('reports.test-attendance-report') }}" class="{{ request()->routeIs('reports.test-attendance-report') ? 'active' : '' }}">Test Attendance Report</a></li>
                             <li><a href="{{ route('attendance.reports.form') }}" class="{{ request()->routeIs('attendance.reports.form') ? 'active' : '' }}">Daily Attendance Report</a></li>
-                            @if(in_array($activeRole, ['admin', 'principal', 'super_admin']) || (isset($user) && $user->is_super_admin))
+                            @if(in_array($activeRole, ['admin', 'principal', 'super_admin', 'clerk', 'hssc_clerk', 'bs_clerk']) || (isset($user) && $user->is_super_admin))
                                 <li><a href="{{ route('reports.teacher_attendance_status') }}" class="{{ request()->routeIs('reports.teacher_attendance_status') ? 'active' : '' }}"><i class="fas fa-clipboard-check text-warning me-1"></i> Teacher Attendance Status</a></li>
                                 <li><a href="{{ route('reports.teacher_workload') }}" class="{{ request()->routeIs('reports.teacher_workload') ? 'active' : '' }}"><i class="fas fa-briefcase text-info me-1"></i> Teacher Workload Report</a></li>
                             @endif
@@ -324,14 +327,15 @@
                     {{-- Academic Info --}}
                     @if($activeRole != 'teacher')
                     <li>
-                        <a href="#" class="menu-toggle {{ request()->routeIs(['subject.*', 'bise.*', 'rooms.*', 'timetables.*', 'designations.*', 'quota.*', 'bloodGroup.*', 'subject-groups.*']) ? 'active' : '' }}" data-target="academic-menu">
+                        <a href="#" class="menu-toggle {{ request()->routeIs(['subject.*', 'bise.*', 'rooms.*', 'timetables.*', 'designations.*', 'quota.*', 'bloodGroup.*', 'subject-groups.*', 'admin.hods.*']) ? 'active' : '' }}" data-target="academic-menu">
                             <i class="fas fa-university"></i>
                             <span>Academic Info</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
                         </a>
                         <ul class="submenu" id="academic-menu">
                             <li><a href="{{ route('rooms.index') }}" class="{{ request()->routeIs('rooms.*') ? 'active' : '' }}">Rooms & Blocks</a></li>
-                             <li><a href="{{ route('subject.index') }}" class="{{ request()->routeIs('subject.*') ? 'active' : '' }}">Subject Catalog</a></li>
+                            <li><a href="{{ route('subject.index') }}" class="{{ request()->routeIs('subject.*') ? 'active' : '' }}">Subject Catalog</a></li>
+                            <li><a href="{{ route('admin.hods.index') }}" class="{{ request()->routeIs('admin.hods.*') ? 'active' : '' }}"><i class="fas fa-user-tie text-primary me-1"></i> Subject HODs</a></li>
                             <li><a href="{{ route('subject-groups.index') }}" class="{{ request()->routeIs('subject-groups.*') ? 'active' : '' }}">Subject Groups</a></li>
                             <li><a href="{{ route('admin.timetables.index') }}" class="{{ request()->routeIs('admin.timetables.*') ? 'active' : '' }}">Class Timetables</a></li>
                             <li><a href="{{ route('time-slots.index') }}" class="{{ request()->routeIs('time-slots.*') ? 'active' : '' }}">Time Slots</a></li>
@@ -367,8 +371,35 @@
                     @endif
                 @endif
                 
-                {{-- Academic Tasks (Teachers) --}}
-                @if($activeRole == 'teacher')
+                {{-- Department Management (HOD) --}}
+                @php
+                    $isUserHod = ($activeRole == 'hod') || ($user && ($user->hasRole('hod') || !empty($user->getHodSubjectIds())));
+                @endphp
+                @if($isUserHod)
+                <li class="sidebar-heading">Department Management</li>
+                <li>
+                    <a href="#" class="menu-toggle {{ request()->routeIs(['student-affairs.sections.*', 'staff.student_assignment']) ? 'active' : '' }}" data-target="hod-tasks-menu">
+                        <i class="fas fa-user-tie text-primary"></i>
+                        <span>Department Tasks</span>
+                        <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                    </a>
+                    <ul class="submenu" id="hod-tasks-menu">
+                        <li>
+                            <a href="{{ route('student-affairs.sections.index') }}" class="{{ request()->routeIs('student-affairs.sections.*') ? 'active' : '' }}">
+                                <i class="fas fa-layer-group me-1"></i> Subject Sections
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('staff.student_assignment') }}" class="{{ request()->routeIs('staff.student_assignment') ? 'active' : '' }}">
+                                <i class="fas fa-user-plus me-1"></i> Assign Students
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                @endif
+
+                {{-- Academic Tasks (Teachers & HODs) --}}
+                @if($activeRole == 'teacher' || $isUserHod)
                 <li class="sidebar-heading">Personal Spaces</li>
                 <li>
                     <a href="#" class="menu-toggle {{ request()->routeIs(['attendance.*', 'he.attendance.*', 'he.results.*', 'struck-off.*']) ? 'active' : '' }}" data-target="teacher-tasks-menu">
@@ -430,6 +461,7 @@
                             <li><a href="{{ route('staff.index') }}" class="{{ request()->routeIs('staff.index') ? 'active' : '' }}">All Staff</a></li>
                             @if($activeRole != 'teacher')
                                 <li><a href="{{ route('staff.create') }}" class="{{ request()->routeIs('staff.create') ? 'active' : '' }}">Add New</a></li>
+                                <li><a href="{{ route('admin.hods.index') }}" class="{{ request()->routeIs('admin.hods.*') ? 'active' : '' }}"><i class="fas fa-user-tie text-primary me-1"></i> Subject HODs</a></li>
                             @endif
                             @if(in_array($activeRole, ['admin', 'principal', 'super_admin']) || (isset($user) && $user->is_super_admin))
                                 <li><a href="{{ route('leave-approvals.index') }}" class="{{ request()->routeIs('leave-approvals.*') ? 'active' : '' }}"><i class="fas fa-check-circle text-success me-1"></i> Leave Approvals</a></li>
@@ -495,7 +527,7 @@
                     {{-- Custom Reports --}}
                     @if(in_array($activeRole, ['admin', 'principal', 'clerk', 'bs_clerk', 'bs_admin']))
                     <li>
-                        <a href="#" class="menu-toggle {{ request()->routeIs('he.reports.*') ? 'active' : '' }}" data-target="he-reports-menu">
+                        <a href="#" class="menu-toggle {{ request()->routeIs(['he.reports.*', 'reports.teacher_attendance_status', 'reports.teacher_workload']) ? 'active' : '' }}" data-target="he-reports-menu">
                             <i class="fas fa-chart-pie"></i>
                             <span>Custom Reports</span>
                             <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -505,6 +537,8 @@
                             <li><a href="{{ route('he.reports.tabulation_sheet.form') }}" class="{{ request()->routeIs('he.reports.tabulation_sheet.*') ? 'active' : '' }}">Tabulation Sheets</a></li>
                             <li><a href="{{ route('he.reports.transcript.search') }}" class="{{ request()->routeIs('he.reports.transcript.*') ? 'active' : '' }}">Transcripts</a></li>
                             <li><a href="{{ route('he.reports.attendance.form') }}" class="{{ request()->routeIs('he.reports.attendance.*') ? 'active' : '' }}">Attendance Reports</a></li>
+                            <li><a href="{{ route('reports.teacher_attendance_status') }}" class="{{ request()->routeIs('reports.teacher_attendance_status') ? 'active' : '' }}"><i class="fas fa-clipboard-check text-warning me-1"></i> Teacher Attendance Status</a></li>
+                            <li><a href="{{ route('reports.teacher_workload') }}" class="{{ request()->routeIs('reports.teacher_workload') ? 'active' : '' }}"><i class="fas fa-briefcase text-info me-1"></i> Teacher Workload Report</a></li>
                         </ul>
                     </li>
                     @endif
@@ -852,7 +886,7 @@
                 @if(Auth::check() && $userRoles->count() > 1)
                     <div class="dropdown me-3">
                         <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="roleDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            {{ ucfirst(session('active_role', $userRoles->first()->name ?? 'Role')) }}
+                            {{ strtoupper(session('active_role', $userRoles->first()->name ?? 'Role')) === 'HOD' ? 'HOD' : ucfirst(session('active_role', $userRoles->first()->name ?? 'Role')) }}
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="roleDropdown">
                             @foreach($userRoles as $role)
@@ -861,7 +895,7 @@
                                         @csrf
                                         <input type="hidden" name="role" value="{{ $role->name }}">
                                         <button type="submit" class="dropdown-item {{ session('active_role') == $role->name ? 'active' : '' }}">
-                                            {{ ucfirst($role->name) }}
+                                            {{ strtoupper($role->name) === 'HOD' ? 'HOD' : ucfirst($role->name) }}
                                         </button>
                                     </form>
                                 </li>

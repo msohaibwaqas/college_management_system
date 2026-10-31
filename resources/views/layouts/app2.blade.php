@@ -423,6 +423,8 @@
                         <li><a href="{{ route('he.reports.transcript.search') }}">Student Transcripts</a></li>
                     @endif
                     <li style="border-top: 1px solid #23282d; margin: 5px 0;"></li>
+                    <li><a href="{{ route('reports.teacher_attendance_status') }}" class="{{ request()->routeIs('reports.teacher_attendance_status') ? 'active' : '' }}"><i class="fas fa-clipboard-check text-warning me-1"></i> Teacher Attendance Status</a></li>
+                    <li><a href="{{ route('reports.teacher_workload') }}" class="{{ request()->routeIs('reports.teacher_workload') ? 'active' : '' }}"><i class="fas fa-briefcase text-info me-1"></i> Teacher Workload Report</a></li>
                     <li><a href="{{ route('reports.cash-register.index') }}">Collection Report</a></li>
                 </ul>
             </li>

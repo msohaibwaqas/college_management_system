@@ -99,7 +99,7 @@
                 </div>
                 <div class="col-md-2">
                     <label class="form-label">Total Marks <span class="text-danger">*</span></label>
-                    <input type="number" id="total_marks" class="form-control" min="1" value="100" required {{ $isTeacher ? 'readonly' : '' }}>
+                    <input type="number" id="total_marks" class="form-control" min="1" value="100" required>
                 </div>
                 <div class="col-md-12">
                     <label class="form-label">Exam Name <span class="text-danger">*</span></label>
@@ -299,7 +299,8 @@ $(document).ready(function() {
             class_level: $('#class_level').val(),
             subject_id: $('#subject_id').val(),
             exam_type: $('#exam_type').val(),
-            exam_name: $('#exam_name').val()
+            exam_name: $('#exam_name').val(),
+            test_date: $('#test_date').val()
         };
 
         if (!params.academic_year || !params.subject_id || !params.exam_type || !params.exam_name) {
@@ -324,21 +325,26 @@ $(document).ready(function() {
                         const existing = response.existing_results[student.id];
                         const theoryVal = existing ? (existing.obtained_theory !== null ? existing.obtained_theory : '') : '';
                         const isAbsent = existing ? (existing.is_absent == 1) : false;
+                        const isStruckOff = student.is_struck_off || (existing && existing.is_struck_off);
                         
                         if (existing && index === 0) {
                             $('#total_marks').val(existing.total_marks);
                         }
 
                         // Determine if inputs should be disabled
-                        // If absent: disabled.
-                        const disabledAttr = isAbsent ? 'disabled style="background-color: #f8d7da;"' : '';
-                        const absentBadge = isAbsent ? '<span class="badge bg-danger ms-2">Absent</span>' : '';
+                        const disabledAttr = (isAbsent || isStruckOff) ? 'disabled style="background-color: #f8d7da;"' : '';
+                        let statusBadge = '';
+                        if (isStruckOff) {
+                            statusBadge = '<span class="badge bg-danger ms-2"><i class="fas fa-ban me-1"></i>Struck Off (Absent)</span>';
+                        } else if (isAbsent) {
+                            statusBadge = '<span class="badge bg-danger ms-2">Absent</span>';
+                        }
 
                         const row = `
-                            <tr>
+                            <tr class="${isStruckOff ? 'table-danger bg-opacity-10' : ''}">
                                 <td>${index + 1}</td>
                                 <td>${student.college_roll_no || 'N/A'}</td>
-                                <td>${student.first_name} ${student.last_name || ''} ${absentBadge}</td>
+                                <td>${student.first_name} ${student.last_name || ''} ${statusBadge}</td>
                                 <td>${student.father ? student.father.name : 'N/A'}</td>
                                  <td>
                                     <input type="number" class="form-control mark-input theory-mark" 
@@ -346,7 +352,7 @@ $(document).ready(function() {
                                         value="${theoryVal}" 
                                         min="0" 
                                         step="1"
-                                        placeholder="${isAbsent ? 'Absent' : 'Theory'}"
+                                        placeholder="${(isAbsent || isStruckOff) ? 'Absent' : 'Theory'}"
                                         ${disabledAttr}>
                                 </td>
                             </tr>

@@ -32,9 +32,13 @@ class MarkAttendanceRequest extends FormRequest
             'attendance.*'    => 'in:present,absent,leave,late',
             'remarks'         => 'nullable|array',
             'remarks.*'       => 'nullable|string|max:255',
-            'class'           => 'nullable|string|max:50',
-            'year'            => 'nullable|integer',
-            'section'         => 'nullable|string|max:50',
+            'class'            => 'nullable|string|max:50',
+            'year'             => 'nullable|integer',
+            'section'          => 'nullable|string|max:50',
+            'test_total_marks' => 'nullable|integer|min:1|max:500',
+            'datesheet_id'     => 'nullable|exists:datesheets,id',
+            'exam_name'        => 'nullable|string|max:150',
+            'exam_type'        => 'nullable|string|max:50',
         ];
     }
 

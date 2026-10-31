@@ -118,13 +118,25 @@
     <div class="d-flex align-items-center mb-4">
         <div class="page-header-icon"><i class="fas fa-layer-group"></i></div>
         <div>
-            <h2 class="mb-0 fw-bold" style="font-size:1.5rem;">Student Sections</h2>
+            <div class="d-flex align-items-center gap-2">
+                <h2 class="mb-0 fw-bold" style="font-size:1.5rem;">Student Sections</h2>
+                @if(Auth::user()->isHod())
+                    <span class="badge bg-primary"><i class="fas fa-user-tie me-1"></i>HOD Department View</span>
+                @endif
+            </div>
             <p class="text-muted mb-0 small">
                 Group enrolled HSSC students into sections <strong>per subject</strong>.
                 Each subject can have its own sections (e.g. Math → G1-G5, Computer → ICS-1-ICS-3).
             </p>
         </div>
     </div>
+
+    @if(Auth::user()->isHod() && empty(Auth::user()->getHodSubjectIds()))
+        <div class="alert alert-warning d-flex align-items-center gap-2 mb-4">
+            <i class="fas fa-exclamation-triangle fa-lg"></i>
+            <span>You are logged in as HOD, but no subject department has been assigned to your staff profile yet. Please contact the administrator.</span>
+        </div>
+    @endif
 
     {{-- Alerts --}}
     @if(session('success'))
@@ -196,9 +208,11 @@
                         <i class="fas fa-sitemap text-primary"></i>
                         <strong>Current Sections — {{ $subjectName }}, {{ $selectedYear }} batch</strong>
                     </div>
+                    @if(!$isHod)
                     <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#copySectionsModal">
                         <i class="fas fa-copy me-1"></i>Copy Sections From Subject
                     </button>
+                    @endif
                 </div>
                 @if($sections->isNotEmpty())
                     <div class="d-flex flex-wrap gap-2" id="sectionsSummary">
@@ -231,9 +245,15 @@
                         {{ $students->count() - $sections->sum('student_count') }} unsectioned
                     </p>
                 @else
-                    <p class="text-muted small mb-0">
-                        No sections assigned to {{ $subjectName }} yet. Click <strong>"Copy Sections From Subject"</strong> above to copy from Computer or Math, or select students below to create a section.
-                    </p>
+                    @if($isHod)
+                        <p class="text-muted small mb-0">
+                            No sections assigned to {{ $subjectName }} yet. Select students below to create a section.
+                        </p>
+                    @else
+                        <p class="text-muted small mb-0">
+                            No sections assigned to {{ $subjectName }} yet. Click <strong>"Copy Sections From Subject"</strong> above to copy from Computer or Math, or select students below to create a section.
+                        </p>
+                    @endif
                 @endif
             </div>
         </div>
@@ -374,7 +394,7 @@
     @endif
 
     {{-- Copy Sections Modal --}}
-    @if($selectedYear && $selectedSubject)
+    @if($selectedYear && $selectedSubject && !$isHod)
     <div class="modal fade" id="copySectionsModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <form action="{{ route('student-affairs.sections.copy') }}" method="POST">
@@ -397,7 +417,7 @@
                             <label class="form-label fw-semibold">Copy Sections From:</label>
                             <select name="source_subject_id" class="form-select" required>
                                 <option value="">-- Select Source Subject --</option>
-                                @foreach($subjects as $sub)
+                                @foreach($allSubjects ?? $subjects as $sub)
                                     @if($sub->id != $selectedSubject)
                                         <option value="{{ $sub->id }}">{{ $sub->name }}</option>
                                     @endif

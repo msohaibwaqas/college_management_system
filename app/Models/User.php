@@ -458,6 +458,14 @@ class User extends Authenticatable
             return 'super_admin';
         }
 
+        $roles = $this->roles->pluck('name')->toArray();
+        $priority = ['super_admin', 'admin', 'principal', 'hod', 'teacher', 'clerk', 'accountant', 'hssc_clerk', 'hssc_admin', 'hssc_accountant', 'bs_clerk', 'bs_admin', 'bs_accountant'];
+        foreach ($priority as $role) {
+            if (in_array($role, $roles)) {
+                return $role;
+            }
+        }
+
         return $this->roles->first()?->name;
     }
 
@@ -489,6 +497,28 @@ class User extends Authenticatable
     public function isStudent(): bool
     {
         return $this->getActiveRole() === 'student';
+    }
+
+    /**
+     * Check if user is currently operating in HOD role or has HOD assignments
+     */
+    public function isHod(): bool
+    {
+        if ($this->isAdministrativeStaff()) {
+            return false;
+        }
+        return $this->getActiveRole() === 'hod' || !empty($this->getHodSubjectIds());
+    }
+
+    /**
+     * Get subject IDs where this user's staff member is assigned as HOD
+     */
+    public function getHodSubjectIds(): array
+    {
+        if (!$this->staff_id) {
+            return [];
+        }
+        return Subject::where('hod_staff_id', $this->staff_id)->pluck('id')->toArray();
     }
 
     /**
@@ -525,6 +555,8 @@ class User extends Authenticatable
             return 'Admin';
         } elseif ($this->hasRole('principal')) {
             return 'Principal';
+        } elseif ($this->hasRole('hod')) {
+            return 'HOD';
         } elseif ($this->hasRole('teacher')) {
             return 'Teacher';
         } elseif ($this->hasRole('student')) {

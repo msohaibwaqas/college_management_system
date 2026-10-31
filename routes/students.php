@@ -52,6 +52,7 @@ Route::prefix('students')->group(function () {
     Route::get('/{student}', [StudentController::class, 'show'])->name('students.show');
     Route::get('/{student}/edit', [StudentController::class, 'edit'])->name('students.edit');
     Route::put('/{student}', [StudentController::class, 'update'])->name('students.update');
+    Route::post('/{student}/picture', [StudentController::class, 'uploadPicture'])->name('students.upload_picture');
     Route::get('/{student}/change-subjects', [StudentController::class, 'changeSubjects'])->name('students.change-subjects');
     Route::post('/{student}/update-subjects', [StudentController::class, 'updateSubjects'])->name('students.update-subjects');
     Route::get('/vouchers/{voucher}/download', [StudentController::class, 'downloadVoucher'])->name('students.vouchers.download');

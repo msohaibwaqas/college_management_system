@@ -43,6 +43,39 @@ class FileUploadService
     }
 
     /**
+     * Update/replace an existing uploaded file with a new file.
+     * Deletes the old file and uploads the new file to the target directory.
+     *
+     * Supports flexible arguments:
+     * - update(UploadedFile $file, ?string $oldRelativePath, string $directory = 'uploads', ?string $prefix = null)
+     * - update(UploadedFile $file, string $directory, ?string $prefix = null, ?string $oldRelativePath = null)
+     *
+     * @param UploadedFile $file The new uploaded file instance
+     * @param string|null $oldRelativePath Path to old file to delete if replacing, or directory name
+     * @param string|null $directory Target subfolder in public/ (e.g. 'student_pictures', 'staff_pictures')
+     * @param string|null $prefix Optional filename prefix
+     * @return string The relative path of the newly saved file
+     */
+    public function update(
+        UploadedFile $file,
+        ?string $oldRelativePath = null,
+        ?string $directory = 'uploads',
+        ?string $prefix = null
+    ): string {
+        $dir = $directory ?? 'uploads';
+        $oldPath = $oldRelativePath;
+
+        // If $oldRelativePath was passed as a simple directory name (e.g. 'student_pictures' without an extension or slash)
+        // and $directory is default 'uploads' or null:
+        if ($oldRelativePath !== null && !empty($oldRelativePath) && !str_contains($oldRelativePath, '.') && !str_contains($oldRelativePath, '/') && ($directory === null || $directory === 'uploads')) {
+            $dir = $oldRelativePath;
+            $oldPath = null;
+        }
+
+        return $this->upload($file, $dir, $prefix, $oldPath);
+    }
+
+    /**
      * Upload a file to a specific storage disk (e.g. 'public') and optionally delete old file.
      *
      * @param UploadedFile $file The uploaded file instance

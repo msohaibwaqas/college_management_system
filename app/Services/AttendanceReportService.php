@@ -196,10 +196,15 @@ class AttendanceReportService
             ->get();
 
         $hasTimetableForSecKeys = [];
+        $hasTimetableForGenKeys = [];
+        $staffSubjectHasSectionsInTt = [];
         foreach ($ttAll as $entry) {
+            $genKey = $entry->staff_id . '_' . $entry->subject_id . '_' . $entry->admission_year;
+            $hasTimetableForGenKeys[$genKey] = true;
             if (!empty($entry->section)) {
-                $secKey = $entry->staff_id . '_' . $entry->subject_id . '_' . $entry->admission_year . '_' . trim($entry->section);
+                $secKey = $genKey . '_' . trim($entry->section);
                 $hasTimetableForSecKeys[$secKey] = true;
+                $staffSubjectHasSectionsInTt[$genKey] = true;
             }
         }
 
@@ -310,13 +315,29 @@ class AttendanceReportService
 
             $isMarked = !empty($attRecord) && $attRecord->marked_count > 0;
 
-            if (!empty($sec) && isset($hasTimetableForSecKeys[$secKey])) {
-                $isScheduledToday = isset($scheduledTodaySecKeys[$secKey]);
+            $hasTimetableForBlock = isset($hasTimetableForGenKeys[$genKey]);
+
+            if ($hasTimetableForBlock) {
+                if (!empty($sec) && isset($hasTimetableForSecKeys[$secKey])) {
+                    $isScheduledToday = isset($scheduledTodaySecKeys[$secKey]);
+                } else {
+                    $hasAnySecInTt = isset($staffSubjectHasSectionsInTt[$genKey]);
+                    if ($hasAnySecInTt && !empty($sec)) {
+                        $isScheduledToday = isset($scheduledTodaySecKeys[$secKey]);
+                    } elseif ($hasAnySecInTt && empty($sec)) {
+                        // Timetable is divided into sections, but this block has no section assigned
+                        $isScheduledToday = false;
+                    } else {
+                        $isScheduledToday = isset($scheduledTodayGenKeys[$genKey]);
+                    }
+                }
             } else {
-                $isScheduledToday = isset($scheduledTodayGenKeys[$genKey]);
+                // If no timetable has been configured for this subject/staff/year, treat as scheduled
+                $isScheduledToday = true;
             }
 
-            if (!$isScheduledToday && !$isMarked) {
+            // Strictly filter out any class/section not scheduled on this day
+            if (!$isScheduledToday) {
                 continue;
             }
 

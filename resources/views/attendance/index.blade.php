@@ -63,13 +63,40 @@
                                     <button class="btn btn-secondary btn-sm" disabled title="Attendance cannot be marked today ({{ $todayOffReason }})">
                                         <i class="fas fa-ban me-1"></i> Closed ({{ str_contains($todayOffReason, 'Sunday') ? 'Sunday' : (str_contains($todayOffReason, 'Vacation') ? 'Vacation' : 'Holiday') }})
                                     </button>
+                                @elseif(isset($class->has_timetable) && $class->has_timetable && !$class->is_scheduled_today)
+                                    <button class="btn btn-outline-secondary btn-sm" disabled title="Scheduled on: {{ $class->scheduled_days->implode(', ') }}">
+                                        <i class="fas fa-calendar-times me-1"></i> Not Scheduled Today
+                                    </button>
+                                    <small class="text-muted d-block mt-1" style="font-size: 0.75rem;">
+                                        Scheduled: <strong>{{ $class->scheduled_days->implode(', ') }}</strong>
+                                    </small>
+                                @elseif(isset($class->scheduled_today_sections) && $class->scheduled_today_sections->count() > 1)
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @foreach($class->scheduled_today_sections as $sec)
+                                            <a href="{{ route('attendance.create', [
+                                                'subject_id' => $class->subject_id, 
+                                                'class' => $class->current_class, 
+                                                'year' => $class->admission_year,
+                                                'section' => $sec
+                                            ]) }}" class="btn btn-primary btn-sm">
+                                                <i class="fas fa-check-circle me-1"></i> Mark Sec {{ $sec }}
+                                            </a>
+                                        @endforeach
+                                    </div>
                                 @else
+                                    @php
+                                        $singleSec = (isset($class->scheduled_today_sections) && $class->scheduled_today_sections->isNotEmpty()) ? $class->scheduled_today_sections->first() : null;
+                                    @endphp
                                     <a href="{{ route('attendance.create', [
                                         'subject_id' => $class->subject_id, 
                                         'class' => $class->current_class, 
-                                        'year' => $class->admission_year
+                                        'year' => $class->admission_year,
+                                        'section' => $singleSec
                                     ]) }}" class="btn btn-primary btn-sm">
                                         <i class="fas fa-check-circle me-1"></i> Mark Attendance
+                                        @if($singleSec)
+                                            <span class="badge bg-light text-primary ms-1">Sec {{ $singleSec }}</span>
+                                        @endif
                                     </a>
                                 @endif
                             </td>

@@ -37,6 +37,7 @@ class DashboardService
         } elseif ($user->roles->isNotEmpty()) {
             if ($user->hasRole('admin')) $activeRole = 'admin';
             elseif ($user->hasRole('principal')) $activeRole = 'principal';
+            elseif ($user->hasRole('hod')) $activeRole = 'hod';
             elseif ($user->hasRole('clerk')) $activeRole = 'clerk';
             elseif ($user->hasRole('teacher')) $activeRole = 'teacher';
             else $activeRole = $user->roles->first()->name;

@@ -13,35 +13,80 @@ use Illuminate\Support\Facades\DB;
 class SectionController extends Controller
 {
     /**
+     * Get subject IDs assigned to the current user if acting as HOD, or null if admin/full access.
+     */
+    protected function getHodSubjectIds(): ?array
+    {
+        $user = Auth::user();
+        if ($user && $user->isHod()) {
+            return $user->getHodSubjectIds();
+        }
+        return null;
+    }
+
+    /**
      * Show the Sections management page.
      * Admin selects admission_year + subject → sees all enrolled students
      * for that subject and can assign/change their section for that subject.
      */
     public function index(Request $request)
     {
-        // All available admission years
-        $admissionYears = Admissions::select('admission_year')
-            ->distinct()
-            ->orderByDesc('admission_year')
-            ->pluck('admission_year');
-
         $selectedYear    = $request->input('admission_year');
         $selectedSubject = $request->input('subject_id');
+        $hodSubjectIds   = $this->getHodSubjectIds();
+        $isHod           = ($hodSubjectIds !== null);
+
+        // All available admission years (exclude fully graduated batches for HODs)
+        $yearsQuery = Admissions::select('admission_year')
+            ->distinct()
+            ->orderByDesc('admission_year');
+
+        if ($isHod) {
+            $yearsQuery->where('status', '!=', 'Graduated');
+        }
+
+        $admissionYears = $yearsQuery->pluck('admission_year');
+
+        if ($selectedYear && $isHod) {
+            $hasActive = Admissions::where('admission_year', $selectedYear)
+                ->where('status', '!=', 'Graduated')
+                ->exists();
+            if (!$hasActive) {
+                return redirect()->route('student-affairs.sections.index')
+                    ->with('error', 'HOD cannot access or manage sections for Graduated batches.');
+            }
+        }
 
         // Subjects for selected year (populated via AJAX, but we also pass for
         // direct page load with both params set)
         $subjects = collect();
+        $allSubjects = collect();
         if ($selectedYear) {
-            $subjects = Subject::where(function ($q) use ($selectedYear) {
+            $baseQuery = Subject::where(function ($q) use ($selectedYear) {
                 $q->whereHas('studentElectives.student.admissions', function ($sq) use ($selectedYear) {
                     $sq->where('admission_year', $selectedYear);
                 })
                 ->orWhereHas('studentCompulsorySubjects.student.admissions', function ($sq) use ($selectedYear) {
                     $sq->where('admission_year', $selectedYear);
                 });
-            })
-            ->orderBy('name')
-            ->get(['id', 'name']);
+            })->orderBy('name');
+
+            $allSubjects = (clone $baseQuery)->get(['id', 'name']);
+
+            if ($hodSubjectIds !== null) {
+                $baseQuery->whereIn('id', $hodSubjectIds);
+            }
+
+            $subjects = $baseQuery->get(['id', 'name']);
+
+            // Auto-select subject for HOD if not specified and they have exactly one subject
+            if (!$selectedSubject && $hodSubjectIds !== null && $subjects->count() === 1) {
+                $selectedSubject = $subjects->first()->id;
+            }
+        }
+
+        if ($selectedSubject && $hodSubjectIds !== null && !in_array((int) $selectedSubject, $hodSubjectIds)) {
+            abort(403, 'Unauthorized access. You are not the HOD for this subject.');
         }
 
         $students        = collect();
@@ -92,11 +137,13 @@ class SectionController extends Controller
         return view('student-affairs.sections', compact(
             'admissionYears',
             'subjects',
+            'allSubjects',
             'selectedYear',
             'selectedSubject',
             'subjectName',
             'students',
-            'sections'
+            'sections',
+            'isHod'
         ));
     }
 
@@ -108,16 +155,22 @@ class SectionController extends Controller
         $year = $request->admission_year;
         if (!$year) return response()->json([]);
 
-        $subjects = Subject::where(function ($q) use ($year) {
+        $hodSubjectIds = $this->getHodSubjectIds();
+
+        $query = Subject::where(function ($q) use ($year) {
             $q->whereHas('studentElectives.student.admissions', function ($sq) use ($year) {
-                $sq->where('admission_year', $year);
+                $sq->where('admission_year', $year)->where('status', '!=', 'Graduated');
             })
             ->orWhereHas('studentCompulsorySubjects.student.admissions', function ($sq) use ($year) {
-                $sq->where('admission_year', $year);
+                $sq->where('admission_year', $year)->where('status', '!=', 'Graduated');
             });
-        })
-        ->orderBy('name')
-        ->get(['id', 'name']);
+        });
+
+        if ($hodSubjectIds !== null) {
+            $query->whereIn('id', $hodSubjectIds);
+        }
+
+        $subjects = $query->orderBy('name')->get(['id', 'name']);
 
         return response()->json($subjects);
     }
@@ -140,6 +193,23 @@ class SectionController extends Controller
         $studentIds = $request->student_ids;
         $section    = strtoupper(trim($request->section));
         $userId     = Auth::id();
+
+        $hodSubjectIds = $this->getHodSubjectIds();
+        if ($hodSubjectIds !== null) {
+            if (!in_array($subjectId, $hodSubjectIds)) {
+                abort(403, 'Unauthorized access. You can only assign sections for your assigned subject.');
+            }
+
+            // HOD cannot assign sections to graduated students
+            $hasGraduated = Admissions::whereIn('student_id', $studentIds)
+                ->where('admission_year', $year)
+                ->where('status', 'Graduated')
+                ->exists();
+
+            if ($hasGraduated) {
+                return redirect()->back()->with('error', 'HOD cannot assign sections to Graduated students.');
+            }
+        }
 
         DB::transaction(function () use ($year, $subjectId, $studentIds, $section, $userId) {
             foreach ($studentIds as $studentId) {
@@ -189,10 +259,37 @@ class SectionController extends Controller
         $year      = (int) $request->admission_year;
         $subjectId = (int) $request->subject_id;
 
+        $hodSubjectIds = $this->getHodSubjectIds();
+        if ($hodSubjectIds !== null) {
+            if (!in_array($subjectId, $hodSubjectIds)) {
+                abort(403, 'Unauthorized access. You can only clear sections for your assigned subject.');
+            }
+
+            // HOD cannot clear sections for graduated students
+            if (!empty($request->student_ids)) {
+                $hasGraduated = Admissions::whereIn('student_id', $request->student_ids)
+                    ->where('admission_year', $year)
+                    ->where('status', 'Graduated')
+                    ->exists();
+
+                if ($hasGraduated) {
+                    return redirect()->back()->with('error', 'HOD cannot clear sections for Graduated students.');
+                }
+            }
+        }
+
         if ($request->clear_all) {
-            StudentSubjectSection::where('admission_year', $year)
-                ->where('subject_id', $subjectId)
-                ->delete();
+            $clearQuery = StudentSubjectSection::where('admission_year', $year)
+                ->where('subject_id', $subjectId);
+
+            // If HOD, preserve any graduated records
+            if ($hodSubjectIds !== null) {
+                $clearQuery->whereHas('student.admissions', function ($q) use ($year) {
+                    $q->where('admission_year', $year)->where('status', '!=', 'Graduated');
+                });
+            }
+
+            $clearQuery->delete();
 
             return redirect()
                 ->route('student-affairs.sections.index', [
@@ -233,6 +330,11 @@ class SectionController extends Controller
         $targetSubjectId = (int) $request->target_subject_id;
         $sourceSubjectId = (int) $request->source_subject_id;
         $userId          = Auth::id();
+
+        $hodSubjectIds = $this->getHodSubjectIds();
+        if ($hodSubjectIds !== null) {
+            abort(403, 'Unauthorized access. HODs are not allowed to copy sections from another subject.');
+        }
 
         // Get student IDs who take target_subject_id for this year
         $targetStudentIds = Student::whereHas('admissions', fn($q) => $q

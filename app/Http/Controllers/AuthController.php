@@ -70,9 +70,23 @@ class AuthController extends Controller
             // Update last login
             $user->updateLastLogin();
             
-            // Set default active role if user has roles
+            // Set default active role if user has roles based on priority
             if ($user->roles->count() > 0 && !session('active_role')) {
-                session(['active_role' => $user->roles->first()->name]);
+                $roleNames = $user->roles->pluck('name');
+                if ($user->is_super_admin || $roleNames->contains('super_admin')) {
+                    $defaultRole = 'super_admin';
+                } elseif ($roleNames->contains('admin')) {
+                    $defaultRole = 'admin';
+                } elseif ($roleNames->contains('principal')) {
+                    $defaultRole = 'principal';
+                } elseif ($roleNames->contains('hod')) {
+                    $defaultRole = 'hod';
+                } elseif ($roleNames->contains('teacher')) {
+                    $defaultRole = 'teacher';
+                } else {
+                    $defaultRole = $roleNames->first();
+                }
+                session(['active_role' => $defaultRole]);
             }
 
             return redirect()->intended(route('dashboard'));

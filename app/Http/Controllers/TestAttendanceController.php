@@ -6,6 +6,7 @@ use App\Models\Result;
 use App\Models\Student;
 use App\Models\Subject;
 use App\Models\Admissions;
+use App\Models\Attendance;
 use App\Models\Datesheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -106,10 +107,11 @@ class TestAttendanceController extends Controller
     {
         $request->validate([
             'academic_year' => 'required|integer',
-            'class_level' => 'required|in:11,12',
-            'subject_id' => 'required|exists:subjects,id',
-            'exam_type' => 'required|string',
-            'exam_name' => 'nullable|string',
+            'class_level'   => 'required|in:11,12',
+            'subject_id'    => 'required|exists:subjects,id',
+            'exam_type'     => 'required|string',
+            'exam_name'     => 'nullable|string',
+            'test_date'     => 'nullable|date',
         ]);
 
         $year = $request->academic_year;
@@ -121,10 +123,24 @@ class TestAttendanceController extends Controller
         // Determine teacher restriction
         $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
+        $testDate = $request->input('test_date');
+        if (!$testDate) {
+            $testDate = Datesheet::where('subject_id', $subjectId)
+                ->where('admission_year', $year)
+                ->where(function ($q) use ($request) {
+                    if ($request->filled('exam_name')) {
+                        $q->where('exam_name', $request->exam_name);
+                    }
+                })
+                ->value('test_date')?->format('Y-m-d');
+        }
+
         $studentsQuery = Student::with(['admissions', 'father'])
             ->join('admissions', 'students.id', '=', 'admissions.student_id')
             ->where('admissions.admission_year', $year)
             ->select('students.*', 'admissions.college_roll_no');
+
+        $studentsQuery->whereNotIn('admissions.status', ['Graduated', 'graduated']);
 
         if ($isTeacher) {
             $staff = Auth::user()->staff;
@@ -151,6 +167,24 @@ class TestAttendanceController extends Controller
         
         $students = $studentsQuery->orderByRaw('CAST(admissions.college_roll_no AS UNSIGNED)')->get();
 
+        // Identify students who were struck off on this test date
+        $struckOffStudentIds = [];
+        if ($testDate) {
+            $struckOffStudentIds = DB::table('student_struck_off_logs')
+                ->whereIn('student_id', $students->pluck('id'))
+                ->whereDate('struck_off_at', '<=', $testDate)
+                ->where(function ($sub) use ($testDate) {
+                    $sub->whereNull('readmitted_at')
+                        ->orWhereDate('readmitted_at', '>', $testDate);
+                })
+                ->pluck('student_id')
+                ->toArray();
+        }
+
+        foreach ($students as $st) {
+            $st->is_struck_off = in_array($st->id, $struckOffStudentIds);
+        }
+
         // Check for existing results to pre-fill attendance
         $existingResults = Result::where('academic_year', $year)
             ->where('class_level', $classLevel)
@@ -160,10 +194,45 @@ class TestAttendanceController extends Controller
             ->get()
             ->keyBy('student_id');
 
+        // If a test date is provided, check lecture attendances for any student missing from results
+        $lectureAttendances = collect();
+        if ($request->filled('test_date')) {
+            $lectureAttendances = Attendance::where('subject_id', $subjectId)
+                ->whereDate('attendance_date', $request->test_date)
+                ->whereIn('student_id', $students->pluck('id'))
+                ->get()
+                ->keyBy('student_id');
+        }
+
+        foreach ($students as $student) {
+            if (in_array($student->id, $struckOffStudentIds)) {
+                $existing = $existingResults->get($student->id);
+                $existingResults->put($student->id, (object) [
+                    'student_id'         => $student->id,
+                    'is_absent'          => 1,
+                    'obtained_theory'    => 0,
+                    'obtained_practical' => 0,
+                    'total_marks'        => $existing?->total_marks ?? null,
+                    'is_struck_off'      => true,
+                ]);
+            } elseif (!$existingResults->has($student->id) && $lectureAttendances->has($student->id)) {
+                $att = $lectureAttendances->get($student->id);
+                $isAbsent = in_array($att->status, ['absent', 'leave']);
+                $existingResults->put($student->id, (object) [
+                    'student_id'         => $student->id,
+                    'is_absent'          => $isAbsent ? 1 : 0,
+                    'obtained_theory'    => $isAbsent ? 0 : null,
+                    'obtained_practical' => $isAbsent ? 0 : null,
+                    'total_marks'        => null,
+                    'is_struck_off'      => false,
+                ]);
+            }
+        }
+
         return response()->json([
-            'students' => $students,
+            'students'         => $students,
             'existing_results' => $existingResults,
-            'subject' => $subject
+            'subject'          => $subject
         ]);
     }
 
@@ -182,6 +251,7 @@ class TestAttendanceController extends Controller
             'old_exam_name' => 'nullable|string',
             'total_marks' => 'required|integer|min:1', 
             'attendance' => 'nullable|array', // Array of student_ids marked as absent
+            'test_date' => 'nullable|date',
         ]);
 
         $year = $request->academic_year;
@@ -217,8 +287,21 @@ class TestAttendanceController extends Controller
         // Teacher restriction check (same as fetchStudents)
         $isTeacher = Auth::check() && Auth::user()->isTeacher();
 
+        $testDate = $request->input('test_date');
+        if (!$testDate) {
+            $testDate = Datesheet::where('subject_id', $subjectId)
+                ->where('admission_year', $year)
+                ->where(function ($q) use ($examName) {
+                    if ($examName) {
+                        $q->where('exam_name', $examName);
+                    }
+                })
+                ->value('test_date')?->format('Y-m-d');
+        }
+
         $studentsQuery = Student::join('admissions', 'students.id', '=', 'admissions.student_id')
             ->where('admissions.admission_year', $year)
+            ->whereNotIn('admissions.status', ['Graduated', 'graduated'])
             ->select('students.id');
 
         if ($isTeacher) {
@@ -245,6 +328,21 @@ class TestAttendanceController extends Controller
         
         $allStudentIds = $studentsQuery->pluck('id')->toArray();
         $absentStudentIds = array_keys($request->attendance ?? []);
+
+        // Automatically mark struck-off students for this test date as absent
+        if ($testDate) {
+            $struckOffOnDate = DB::table('student_struck_off_logs')
+                ->whereIn('student_id', $allStudentIds)
+                ->whereDate('struck_off_at', '<=', $testDate)
+                ->where(function ($sub) use ($testDate) {
+                    $sub->whereNull('readmitted_at')
+                        ->orWhereDate('readmitted_at', '>', $testDate);
+                })
+                ->pluck('student_id')
+                ->toArray();
+
+            $absentStudentIds = array_unique(array_merge($absentStudentIds, $struckOffOnDate));
+        }
         
         DB::transaction(function () use ($request, $allStudentIds, $absentStudentIds) {
             foreach ($allStudentIds as $studentId) {
