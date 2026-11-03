@@ -70,10 +70,13 @@ class AuthController extends Controller
             // Update last login
             $user->updateLastLogin();
             
-            // Set default active role if user has roles based on priority
-            if ($user->roles->count() > 0 && !session('active_role')) {
+            // Set default active role on login:
+            // When a user logs in and has a role of teacher, log them in as teacher
+            if ($user->roles->count() > 0) {
                 $roleNames = $user->roles->pluck('name');
-                if ($user->is_super_admin || $roleNames->contains('super_admin')) {
+                if ($roleNames->contains('teacher')) {
+                    $defaultRole = 'teacher';
+                } elseif ($user->is_super_admin || $roleNames->contains('super_admin')) {
                     $defaultRole = 'super_admin';
                 } elseif ($roleNames->contains('admin')) {
                     $defaultRole = 'admin';
@@ -81,8 +84,8 @@ class AuthController extends Controller
                     $defaultRole = 'principal';
                 } elseif ($roleNames->contains('hod')) {
                     $defaultRole = 'hod';
-                } elseif ($roleNames->contains('teacher')) {
-                    $defaultRole = 'teacher';
+                } elseif ($roleNames->contains('timetable_incharge')) {
+                    $defaultRole = 'timetable_incharge';
                 } else {
                     $defaultRole = $roleNames->first();
                 }

@@ -21,9 +21,22 @@ use App\Http\Controllers\HeAttendanceController;
 |--------------------------------------------------------------------------
 */
 
-Route::prefix('he')->middleware('role:admin,principal,clerk,bs_clerk,bs_admin,teacher')->group(function () {
+Route::prefix('he')->middleware('role:admin,principal,clerk,bs_clerk,bs_admin,teacher,timetable_incharge')->group(function () {
     
-    // Administrative HE Routes (Restrict from Teachers)
+    // HE Timetables (Accessible to Timetable Incharge and HE Administrators)
+    Route::middleware(['role:admin,principal,clerk,bs_clerk,bs_admin,timetable_incharge'])->group(function () {
+        Route::resource('timetables', HeTimetableController::class)->names([
+            'index' => 'he.timetables.index',
+            'create' => 'he.timetables.create',
+            'store' => 'he.timetables.store',
+            'destroy' => 'he.timetables.destroy',
+        ])->only(['index', 'create', 'store', 'destroy']);
+        Route::post('timetables/clone', [HeTimetableController::class, 'clone'])->name('he.timetables.clone');
+        Route::delete('timetables/destroy-all', [HeTimetableController::class, 'destroyAll'])->name('he.timetables.destroy_all');
+        Route::get('timetables/get-semester-subjects', [HeTimetableController::class, 'getSemesterSubjects'])->name('he.timetables.get_semester_subjects');
+    });
+
+    // Administrative HE Routes (Restrict from Teachers and Timetable Incharge)
     Route::middleware(['role:admin,principal,clerk,bs_clerk,bs_admin'])->group(function () {
         Route::resource('programs', ProgramController::class);
         Route::resource('bs-subjects', BsSubjectController::class);
@@ -68,17 +81,6 @@ Route::prefix('he')->middleware('role:admin,principal,clerk,bs_clerk,bs_admin,te
         // HE Seating Plans
         Route::resource('seating-plans', HeSeatingPlanController::class)->names('he.seating_plans');
         Route::get('seating-plans/{seatingPlan}/attendance-sheet', [HeSeatingPlanController::class, 'attendanceSheet'])->name('he.seating_plans.attendance_sheet');
-
-        // HE Timetables
-        Route::resource('timetables', HeTimetableController::class)->names([
-            'index' => 'he.timetables.index',
-            'create' => 'he.timetables.create',
-            'store' => 'he.timetables.store',
-            'destroy' => 'he.timetables.destroy',
-        ])->only(['index', 'create', 'store', 'destroy']);
-        Route::post('timetables/clone', [HeTimetableController::class, 'clone'])->name('he.timetables.clone');
-        Route::delete('timetables/destroy-all', [HeTimetableController::class, 'destroyAll'])->name('he.timetables.destroy_all');
-        Route::get('timetables/get-semester-subjects', [HeTimetableController::class, 'getSemesterSubjects'])->name('he.timetables.get_semester_subjects');
 
         // HE Invigilator Routes
         Route::prefix('invigilators')->group(function () {

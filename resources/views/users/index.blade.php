@@ -88,7 +88,9 @@
                                 </td>
                                 <td>
                                     @foreach($user->roles as $role)
-                                        <span class="badge bg-info">{{ $role->name }}</span>
+                                        <span class="badge {{ $role->name === 'timetable_incharge' ? 'bg-warning text-dark' : ($role->name === 'hod' ? 'bg-primary' : ($role->name === 'teacher' ? 'bg-success' : 'bg-info')) }}">
+                                            {{ strtoupper($role->name) === 'HOD' ? 'HOD' : ucwords(str_replace('_', ' ', $role->name)) }}
+                                        </span>
                                     @endforeach
                                 </td>
                                 <td>

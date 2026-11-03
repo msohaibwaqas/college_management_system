@@ -12,6 +12,10 @@ use App\Models\BsSubject;
 use App\Models\FeeVoucher;
 use App\Models\AdmissionApplication;
 use App\Models\LeaveApplication;
+use App\Models\TimetableEntry;
+use App\Models\TimeSlot;
+use App\Models\Room;
+use App\Models\HeTimetable;
 use App\Services\AcademicCalendarService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -32,12 +36,15 @@ class DashboardService
             return $activeRole;
         }
 
-        if ($user->is_super_admin) {
+        if ($user->hasRole('teacher')) {
+            $activeRole = 'teacher';
+        } elseif ($user->is_super_admin) {
             $activeRole = 'admin';
         } elseif ($user->roles->isNotEmpty()) {
             if ($user->hasRole('admin')) $activeRole = 'admin';
             elseif ($user->hasRole('principal')) $activeRole = 'principal';
             elseif ($user->hasRole('hod')) $activeRole = 'hod';
+            elseif ($user->hasRole('timetable_incharge')) $activeRole = 'timetable_incharge';
             elseif ($user->hasRole('clerk')) $activeRole = 'clerk';
             elseif ($user->hasRole('teacher')) $activeRole = 'teacher';
             else $activeRole = $user->roles->first()->name;
@@ -366,6 +373,15 @@ class DashboardService
                 'pending'   => FeeVoucher::where('status', 'pending')
                     ->whereHas('application', fn ($q) => $q->whereIn('program_type', ['BS', 'ADP', 'DIT']))
                     ->count(),
+            ],
+            'timetable_incharge' => [
+                'totalEntries'        => TimetableEntry::count(),
+                'totalTimeSlots'      => TimeSlot::count(),
+                'totalRooms'          => Room::where('is_active', true)->forLectures()->count(),
+                'activeTeachersCount' => TimetableEntry::whereNotNull('staff_id')->distinct('staff_id')->count('staff_id'),
+                'totalHeEntries'      => HeTimetable::count(),
+                'availableYears'      => Admissions::distinct()->orderByDesc('admission_year')->pluck('admission_year'),
+                'systemHealth'        => $this->getSystemHealth(),
             ],
             default => [],
         };

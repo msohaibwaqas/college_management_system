@@ -156,12 +156,16 @@
             $userRoles = $user ? $user->roles : collect();
             $activeRole = session('active_role');
             if (!$activeRole && Auth::check()) {
-                if ($user->is_super_admin) {
+                if ($userRoles->contains('name', 'teacher')) {
+                    $activeRole = 'teacher';
+                } elseif ($user->is_super_admin) {
                     $activeRole = 'admin';
                 } elseif ($userRoles->isNotEmpty()) {
                     // Default priority fallback if session is empty
                     if ($userRoles->contains('name', 'admin')) $activeRole = 'admin';
                     elseif ($userRoles->contains('name', 'principal')) $activeRole = 'principal';
+                    elseif ($userRoles->contains('name', 'hod')) $activeRole = 'hod';
+                    elseif ($userRoles->contains('name', 'timetable_incharge')) $activeRole = 'timetable_incharge';
                     elseif ($userRoles->contains('name', 'teacher')) $activeRole = 'teacher';
                     else $activeRole = $userRoles->first()->name;
                 }
@@ -257,9 +261,9 @@
             
             {{-- HSSC Academics --}}
             @if($sidebarView == 'HSSC' && in_array($activeRole, ['admin', 'principal', 'clerk', 'hssc_clerk', 'hssc_admin', 'accountant', 'hssc_accountant', 'teacher']))
-                @if($activeRole != 'teacher')
+                @if($activeRole != 'teacher' || ($user && $user->hasRole('timetable_incharge')))
                 <li>
-                    <a href="#" class="menu-toggle {{ request()->routeIs(['rooms.*', 'subject.*', 'subject-groups.*', 'timetables.*', 'bise.*', 'designations.*', 'quota.*', 'bloodGroup.*']) ? 'active' : '' }}" data-target="hssc-acad-info">
+                    <a href="#" class="menu-toggle {{ request()->routeIs(['rooms.*', 'subject.*', 'subject-groups.*', 'admin.timetables.*', 'bise.*', 'designations.*', 'quota.*', 'bloodGroup.*']) ? 'active' : '' }}" data-target="hssc-acad-info">
                         <i class="fas fa-university"></i>
                         <span>Academic Info</span>
                         <i class="fas fa-chevron-right menu-toggle-icon"></i>
@@ -586,7 +590,7 @@
                 @if(Auth::check() && $userRoles->count() > 1)
                     <div class="dropdown me-3">
                         <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="roleDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            {{ ucfirst(session('active_role', $userRoles->first()->name ?? 'Role')) }}
+                            {{ strtoupper(session('active_role', $userRoles->first()->name ?? 'Role')) === 'HOD' ? 'HOD' : ucwords(str_replace('_', ' ', session('active_role', $userRoles->first()->name ?? 'Role'))) }}
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="roleDropdown">
                             @foreach($userRoles as $role)
@@ -595,7 +599,7 @@
                                         @csrf
                                         <input type="hidden" name="role" value="{{ $role->name }}">
                                         <button type="submit" class="dropdown-item {{ session('active_role') == $role->name ? 'active' : '' }}">
-                                            {{ ucfirst($role->name) }}
+                                            {{ strtoupper($role->name) === 'HOD' ? 'HOD' : ucwords(str_replace('_', ' ', $role->name)) }}
                                         </button>
                                     </form>
                                 </li>

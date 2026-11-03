@@ -35,6 +35,22 @@ class CheckRole
             if ($activeRole === 'teacher' && in_array('hod', $roles) && $user->hasRole('hod')) {
                 return $next($request);
             }
+            // A teacher who is also timetable_incharge can access timetable_incharge routes
+            if ($activeRole === 'teacher' && in_array('timetable_incharge', $roles) && $user->hasRole('timetable_incharge')) {
+                return $next($request);
+            }
+            // An HOD who is also timetable_incharge can access timetable_incharge routes
+            if ($activeRole === 'hod' && in_array('timetable_incharge', $roles) && $user->hasRole('timetable_incharge')) {
+                return $next($request);
+            }
+            // A timetable_incharge who is also a teacher can access teacher routes
+            if ($activeRole === 'timetable_incharge' && in_array('teacher', $roles) && $user->hasRole('teacher')) {
+                return $next($request);
+            }
+            // A timetable_incharge who is also an HOD can access HOD routes
+            if ($activeRole === 'timetable_incharge' && in_array('hod', $roles) && $user->hasRole('hod')) {
+                return $next($request);
+            }
             // If active role is set but not allowed, deny access.
             // This strictly enforces the switched role's permissions.
             abort(403, 'Unauthorized access. You do not have the required role.');

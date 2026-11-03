@@ -5,7 +5,26 @@
 @section('content')
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Master Timetable Builder</h1>
+        <div>
+            <h1 class="h3 mb-1 text-gray-800">Master Timetable Builder</h1>
+            <p class="text-muted small mb-0">Manage college lectures, teacher assignments, and time slots</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            @php
+                $incharges = \App\Models\User::whereHas('roles', fn($q) => $q->where('name', 'timetable_incharge'))->with('staff')->get();
+            @endphp
+            @if($incharges->isNotEmpty())
+                <div class="d-flex align-items-center bg-white px-3 py-1 border rounded shadow-sm">
+                    <i class="fas fa-user-clock text-warning me-2 fa-lg"></i>
+                    <div>
+                        <small class="text-muted d-block" style="font-size: 11px;">Timetable Incharge:</small>
+                        <strong class="small text-dark">
+                            {{ $incharges->map(fn($u) => $u->full_name ?: $u->username)->join(', ') }}
+                        </strong>
+                    </div>
+                </div>
+            @endif
+        </div>
     </div>
 
     @if(session('success'))

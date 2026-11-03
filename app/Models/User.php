@@ -454,12 +454,16 @@ class User extends Authenticatable
             return $activeRole;
         }
 
+        if ($this->hasRole('teacher')) {
+            return 'teacher';
+        }
+
         if ($this->is_super_admin) {
             return 'super_admin';
         }
 
         $roles = $this->roles->pluck('name')->toArray();
-        $priority = ['super_admin', 'admin', 'principal', 'hod', 'teacher', 'clerk', 'accountant', 'hssc_clerk', 'hssc_admin', 'hssc_accountant', 'bs_clerk', 'bs_admin', 'bs_accountant'];
+        $priority = ['super_admin', 'admin', 'principal', 'hod', 'timetable_incharge', 'teacher', 'clerk', 'accountant', 'hssc_clerk', 'hssc_admin', 'hssc_accountant', 'bs_clerk', 'bs_admin', 'bs_accountant'];
         foreach ($priority as $role) {
             if (in_array($role, $roles)) {
                 return $role;
@@ -511,6 +515,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user is currently operating as timetable incharge or has the role assigned
+     */
+    public function isTimetableIncharge(): bool
+    {
+        return $this->getActiveRole() === 'timetable_incharge' || $this->hasRole('timetable_incharge');
+    }
+
+    /**
      * Get subject IDs where this user's staff member is assigned as HOD
      */
     public function getHodSubjectIds(): array
@@ -557,6 +569,8 @@ class User extends Authenticatable
             return 'Principal';
         } elseif ($this->hasRole('hod')) {
             return 'HOD';
+        } elseif ($this->hasRole('timetable_incharge')) {
+            return 'Timetable Incharge';
         } elseif ($this->hasRole('teacher')) {
             return 'Teacher';
         } elseif ($this->hasRole('student')) {

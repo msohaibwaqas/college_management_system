@@ -50,7 +50,7 @@ class DashboardController extends Controller
             return view('dashboards.teacher', $data);
         }
 
-        if (in_array($activeRole, ['clerk', 'accountant', 'hssc_clerk', 'hssc_admin', 'hssc_accountant', 'bs_clerk', 'bs_admin', 'bs_accountant'])) {
+        if (in_array($activeRole, ['clerk', 'accountant', 'hssc_clerk', 'hssc_admin', 'hssc_accountant', 'bs_clerk', 'bs_admin', 'bs_accountant', 'timetable_incharge'])) {
             $data = $this->dashboardService->getRoleData($activeRole);
             return view("dashboards.{$activeRole}", $data);
         }

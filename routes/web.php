@@ -281,6 +281,12 @@ Route::middleware(['auth'])->group(function () {
     });
 
     // Datesheets & Seating Plans
+    // Rooms
+    Route::middleware(['role:admin,principal,clerk,hssc_clerk,hssc_admin,timetable_incharge'])->group(function () {
+        Route::resource('rooms', RoomController::class);
+    });
+
+    // Datesheets & Seating Plans
     Route::middleware(['role:admin,principal,clerk,hssc_clerk,hssc_admin'])->group(function () {
         Route::get('datesheets/summary', [DatesheetController::class, 'summary'])->name('datesheets.summary');
         Route::get('datesheets/generate', [DatesheetController::class, 'generate'])->name('datesheets.generate');
@@ -288,14 +294,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('datesheets/bulk-delete', [DatesheetController::class, 'bulkDestroy'])->name('datesheets.bulk_destroy');
         Route::post('datesheets/name-exam', [DatesheetController::class, 'nameExamRange'])->name('datesheets.name_exam');
         Route::resource('datesheets', DatesheetController::class)->only(['index', 'create', 'store', 'destroy']);
-        Route::resource('rooms', RoomController::class);
         Route::get('seating-plans/{seatingPlan}/attendance', [SeatingPlanController::class, 'attendanceSheet'])->name('seating-plans.attendance');
         Route::post('seating-plans/bulk-delete', [SeatingPlanController::class, 'bulkDestroy'])->name('seating-plans.bulk_destroy');
         Route::resource('seating-plans', SeatingPlanController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
     });
 
     // Timetables
-    Route::prefix('admin/timetables')->middleware('role:admin,principal,clerk')->group(function () {
+    Route::prefix('admin/timetables')->middleware('role:admin,principal,clerk,timetable_incharge')->group(function () {
         Route::get('/', [AdminTimetableController::class, 'index'])->name('admin.timetables.index');
         Route::get('/teacher-batch', [AdminTimetableController::class, 'teacherBatchIndex'])->name('admin.timetables.teacher_batch');
         Route::post('/teacher-batch', [AdminTimetableController::class, 'storeTeacherBatch'])->name('admin.timetables.store_teacher_batch');

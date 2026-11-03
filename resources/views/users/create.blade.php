@@ -109,7 +109,7 @@
                                            class="form-check-input"
                                            {{ in_array($role->id, old('roles', [])) ? 'checked' : '' }}>
                                     <label for="role_{{ $role->id }}" class="form-check-label">
-                                        {{ ucfirst($role->name) }}
+                                        {{ strtoupper($role->name) === 'HOD' ? 'HOD' : ucwords(str_replace('_', ' ', $role->name)) }}
                                         @if($role->description)
                                             <small class="text-muted d-block">{{ $role->description }}</small>
                                         @endif

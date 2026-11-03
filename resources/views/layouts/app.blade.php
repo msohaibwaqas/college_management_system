@@ -55,7 +55,9 @@
             $userRoles = $user ? $user->roles : collect();
             $activeRole = session('active_role');
             if (!$activeRole && Auth::check()) {
-                if ($user->is_super_admin) {
+                if ($userRoles->contains('name', 'teacher')) {
+                    $activeRole = 'teacher';
+                } elseif ($user->is_super_admin) {
                     $activeRole = $userRoles->contains('name', 'super_admin') ? 'super_admin' : 'admin';
                 } elseif ($userRoles->isNotEmpty()) {
                     // Default priority fallback if session is empty
@@ -63,6 +65,7 @@
                     elseif ($userRoles->contains('name', 'principal')) $activeRole = 'principal';
                     elseif ($userRoles->contains('name', 'super_admin')) $activeRole = 'super_admin';
                     elseif ($userRoles->contains('name', 'hod') || ($user && !empty($user->getHodSubjectIds()))) $activeRole = 'hod';
+                    elseif ($userRoles->contains('name', 'timetable_incharge')) $activeRole = 'timetable_incharge';
                     elseif ($userRoles->contains('name', 'teacher')) $activeRole = 'teacher';
                     else $activeRole = $userRoles->first()->name;
                 }
@@ -392,6 +395,58 @@
                         <li>
                             <a href="{{ route('staff.student_assignment') }}" class="{{ request()->routeIs('staff.student_assignment') ? 'active' : '' }}">
                                 <i class="fas fa-user-plus me-1"></i> Assign Students
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                @endif
+
+                {{-- Timetable Management (Timetable Incharge) --}}
+                @php
+                    $isUserTimetableIncharge = ($activeRole == 'timetable_incharge') || ($user && $user->hasRole('timetable_incharge'));
+                @endphp
+                @if($isUserTimetableIncharge)
+                <li class="sidebar-heading">Timetable Management</li>
+                <li>
+                    <a href="#" class="menu-toggle {{ request()->routeIs(['admin.timetables.*', 'time-slots.*', 'he.timetables.*']) ? 'active' : '' }}" data-target="timetable-incharge-menu">
+                        <i class="fas fa-calendar-alt text-warning"></i>
+                        <span>Timetable Tasks</span>
+                        <i class="fas fa-chevron-right menu-toggle-icon"></i>
+                    </a>
+                    <ul class="submenu" id="timetable-incharge-menu">
+                        <li>
+                            <a href="{{ route('admin.timetables.index') }}" class="{{ request()->routeIs('admin.timetables.index') ? 'active' : '' }}">
+                                <i class="fas fa-table me-1"></i> Class Timetables
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('admin.timetables.teacher_batch') }}" class="{{ request()->routeIs('admin.timetables.teacher_batch') ? 'active' : '' }}">
+                                <i class="fas fa-chalkboard-teacher me-1"></i> Teacher Batch Builder
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('admin.timetables.subject_batch') }}" class="{{ request()->routeIs('admin.timetables.subject_batch') ? 'active' : '' }}">
+                                <i class="fas fa-book me-1"></i> Subject Batch Builder
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('admin.timetables.summary') }}" target="_blank" class="{{ request()->routeIs('admin.timetables.summary') ? 'active' : '' }}">
+                                <i class="fas fa-th me-1"></i> Master Timetable Matrix
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('time-slots.index') }}" class="{{ request()->routeIs('time-slots.*') ? 'active' : '' }}">
+                                <i class="fas fa-clock me-1"></i> Time Slots
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('he.timetables.index') }}" class="{{ request()->routeIs('he.timetables.*') ? 'active' : '' }}">
+                                <i class="fas fa-graduation-cap me-1"></i> BS / ADP Timetables
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ route('rooms.index') }}" class="{{ request()->routeIs('rooms.*') ? 'active' : '' }}">
+                                <i class="fas fa-door-open me-1"></i> Lecture Rooms
                             </a>
                         </li>
                     </ul>
@@ -886,7 +941,7 @@
                 @if(Auth::check() && $userRoles->count() > 1)
                     <div class="dropdown me-3">
                         <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="roleDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                            {{ strtoupper(session('active_role', $userRoles->first()->name ?? 'Role')) === 'HOD' ? 'HOD' : ucfirst(session('active_role', $userRoles->first()->name ?? 'Role')) }}
+                            {{ strtoupper(session('active_role', $userRoles->first()->name ?? 'Role')) === 'HOD' ? 'HOD' : ucwords(str_replace('_', ' ', session('active_role', $userRoles->first()->name ?? 'Role'))) }}
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="roleDropdown">
                             @foreach($userRoles as $role)
@@ -895,7 +950,7 @@
                                         @csrf
                                         <input type="hidden" name="role" value="{{ $role->name }}">
                                         <button type="submit" class="dropdown-item {{ session('active_role') == $role->name ? 'active' : '' }}">
-                                            {{ strtoupper($role->name) === 'HOD' ? 'HOD' : ucfirst($role->name) }}
+                                            {{ strtoupper($role->name) === 'HOD' ? 'HOD' : ucwords(str_replace('_', ' ', $role->name)) }}
                                         </button>
                                     </form>
                                 </li>

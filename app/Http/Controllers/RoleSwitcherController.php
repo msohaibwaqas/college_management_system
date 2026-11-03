@@ -35,7 +35,7 @@ class RoleSwitcherController extends Controller
         }
 
         // Redirect to the dashboard (or appropriate landing page for that role)
-        $roleLabel = strtoupper($role) === 'HOD' ? 'HOD' : ucfirst($role);
+        $roleLabel = strtoupper($role) === 'HOD' ? 'HOD' : ucwords(str_replace('_', ' ', $role));
         return redirect()->route('dashboard')->with('success', "Switched to " . $roleLabel . " view.");
     }
 

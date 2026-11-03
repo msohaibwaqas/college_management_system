@@ -54,6 +54,22 @@ class RolesSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
+            [
+                'name' => 'hod',
+                'description' => 'Head of Department - manages subject sections and student assignments',
+                'guard_name' => 'web',
+                'is_system_role' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'name' => 'timetable_incharge',
+                'description' => 'Timetable Incharge - manages academic class timetables, time slots, and schedules',
+                'guard_name' => 'web',
+                'is_system_role' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
         ];
 
         foreach ($roles as $role) {

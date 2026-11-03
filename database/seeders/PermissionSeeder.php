@@ -19,6 +19,7 @@ class PermissionSeeder extends Seeder
             
             // Academic
             'subject.view', 'subject.manage', 'bise.view', 'bise.manage', 'designations.manage',
+            'timetables.manage', 'timetables.view',
             
             // Exams
             'datesheets.manage', 'seating_plans.manage', 'rooms.manage',
@@ -54,6 +55,13 @@ class PermissionSeeder extends Seeder
         if ($bsClerk) {
             $bsClerk->permissions()->sync(Permission::whereIn('name', [
                 'he.admissions.manage', 'he.results.manage', 'he.datesheets.manage', 'he.timetables.manage'
+            ])->pluck('id'));
+        }
+
+        $timetableIncharge = Roles::where('name', 'timetable_incharge')->first();
+        if ($timetableIncharge) {
+            $timetableIncharge->permissions()->sync(Permission::whereIn('name', [
+                'timetables.manage', 'timetables.view', 'he.timetables.manage', 'rooms.manage', 'subject.view'
             ])->pluck('id'));
         }
     }
